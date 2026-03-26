@@ -1,5 +1,6 @@
-1. Automate db composition by allowing the user to add the DB url, may be mongo, neon or firebase. 
+1. Automate db composition by allowing the user to add the DB url, may be mongo, neon, supabase or firebase. 
 2. Add filter, sort, search using the data in the frontend.
 3. npm upload
 4. optimize
 5. better UI/UX
+6. ttl logic, and LRU cache!
