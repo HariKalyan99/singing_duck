@@ -1,7 +1,7 @@
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-function getCodeSnippet(filePath, errorLine, context = 3) {
+function getCodeSnippet(filePath, errorLine, context = 5) {
   try {
     if (filePath.startsWith("file://")) {
       filePath = fileURLToPath(filePath);
