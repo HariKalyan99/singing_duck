@@ -3,7 +3,7 @@ import cors from "cors";
 import crypto from "crypto";
 import parseStackTrace from "./helper/parseStackTrace.js";
 import getCodeSnippet from "./helper/getCodeSnippet.js";
-import getFingerprint from "./helper/getFingerprint.js";
+import getFingerPrint from "./helper/getFingerPrint.js";
 import captureDuck from "./main/captureDuck.js";
 
 export const errorDB = [];
@@ -38,7 +38,7 @@ app.post("/errors", (req, res) => {
     timeStamp: new Date().toISOString(),
   };
 
-  errorObject.fingerPrint = getFingerprint(errorObject);
+  errorObject.fingerPrint = getFingerPrint(errorObject);
 
   errorDB.push(errorObject);
 
@@ -79,6 +79,16 @@ app.get("/test-error", (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.get("/test-promise-error", (req, res) => {
+  new Promise((_, reject) => {
+    reject(new Error("Manual promise error"));
+  }).catch((err) => {
+    captureDuck(err, { url: "promiseService" });
+  });
+
+  res.json({ message: "Promise handled manually" });
 });
 
 // global error middleware after routes

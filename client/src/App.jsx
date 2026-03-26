@@ -23,6 +23,15 @@ const App = () => {
     }
   };
 
+  const triggerBackendPromiseError = async () => {
+    try {
+      await axios.get("http://localhost:8080/test-promise-error");
+      fetchAllErrors();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString();
   };
@@ -40,12 +49,20 @@ const App = () => {
           <p className="text-sm text-gray-500 mt-1">Realtime error tracking</p>
         </div>
 
-        <button
-          onClick={triggerBackendError}
-          className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
-        >
-          Trigger Test Error
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={triggerBackendError}
+            className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
+          >
+            Trigger Test Error
+          </button>
+          <button
+            onClick={triggerBackendPromiseError}
+            className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
+          >
+            Trigger Promise Error
+          </button>
+        </div>
       </div>
 
       {/* Empty State */}

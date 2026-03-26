@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import getCodeSnippet from "../helper/getCodeSnippet.js";
 import parseStackTrace from "../helper/parseStackTrace.js";
-import getFingerprint from "../helper/getFingerprint.js";
+import getFingerPrint from "../helper/getFingerPrint.js";
 import { errorDB } from "../server.js";
 
 function captureDuck(error, extra = {}) {
@@ -29,7 +29,7 @@ function captureDuck(error, extra = {}) {
       timestamp: new Date().toISOString(),
     };
 
-    errorObj.fingerprint = getFingerprint(errorObj);
+    errorObj.fingerPrint = getFingerPrint(errorObj);
 
     errorDB.push(errorObj);
 
