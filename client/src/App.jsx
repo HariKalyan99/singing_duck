@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { captureDuck } from "./sdk/errorTracker";
 
 const App = () => {
   const [errors, setErrors] = useState([]);
@@ -17,7 +18,7 @@ const App = () => {
   const triggerBackendError = async () => {
     try {
       await axios.get("http://localhost:8080/test-error");
-      fetchAllErrors();
+      await fetchAllErrors();
     } catch (error) {
       console.error(error);
     }
@@ -26,9 +27,19 @@ const App = () => {
   const triggerBackendPromiseError = async () => {
     try {
       await axios.get("http://localhost:8080/test-promise-error");
-      fetchAllErrors();
+      await fetchAllErrors();
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const triggerFrontendError = async () => {
+    try {
+      const obj = null;
+      return obj.name;
+    } catch (err) {
+      await captureDuck(err, { context: "myFunction" });
+      await fetchAllErrors();
     }
   };
 
@@ -62,6 +73,13 @@ const App = () => {
           >
             Trigger Promise Error
           </button>
+
+          <button
+            onClick={triggerFrontendError}
+            className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
+          >
+            Trigger Frontend Error
+          </button>
         </div>
       </div>
 
@@ -88,9 +106,11 @@ const App = () => {
               <div className="flex justify-between items-center px-6 py-4">
                 <div>
                   <h3 className="text-gray-800 font-medium">{error.message}</h3>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {error.stack?.[0]?.file} : {error.stack?.[0]?.line}
-                  </p>
+                  {error.type === "backend" && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {error.stack?.[0]?.file} : {error.stack?.[0]?.line}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -125,7 +145,7 @@ const App = () => {
                   </div>
 
                   {/* Code Snippet */}
-                  {error.codeSnippet && (
+                  {error?.codeSnippet && (
                     <div className="rounded-lg overflow-hidden border border-gray-800">
                       <pre className="bg-black text-gray-200 text-xs p-4 overflow-x-auto">
                         {error.codeSnippet.map((line) => (

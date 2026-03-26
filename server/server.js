@@ -1,8 +1,6 @@
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-import parseStackTrace from "./helper/parseStackTrace.js";
-import getCodeSnippet from "./helper/getCodeSnippet.js";
 import getFingerPrint from "./helper/getFingerPrint.js";
 import captureDuck from "./main/captureDuck.js";
 
@@ -16,16 +14,6 @@ app.use(express.json());
 app.post("/errors", (req, res) => {
   const { message, stack, url, userAgent, type = "frontend" } = req.body;
 
-  const parsedStack = parseStackTrace(stack);
-
-  const topFrame = parsedStack?.[0];
-
-  let codeSnippet = null;
-
-  if (topFrame?.file && topFrame?.line) {
-    codeSnippet = getCodeSnippet(topFrame.file, topFrame.line);
-  }
-
   const errorObject = {
     id: crypto.randomUUID(),
     message,
@@ -34,8 +22,7 @@ app.post("/errors", (req, res) => {
     url,
     userAgent,
     type,
-    codeSnippet,
-    timeStamp: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
   };
 
   errorObject.fingerPrint = getFingerPrint(errorObject);
