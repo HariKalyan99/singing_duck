@@ -138,9 +138,16 @@ const App = () => {
                       <p className="text-gray-400 text-xs mb-1">URL</p>
                       <p>{error.url}</p>
                     </div>
+
                     <div>
                       <p className="text-gray-400 text-xs mb-1">Time</p>
                       <p>{formatTime(error.timestamp)}</p>
+                    </div>
+
+                    {/* ADD THIS */}
+                    <div className="col-span-2">
+                      <p className="text-gray-400 text-xs mb-1">User Agent</p>
+                      <p className="break-words">{error.userAgent}</p>
                     </div>
                   </div>
 
