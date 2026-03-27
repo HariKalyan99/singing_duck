@@ -1,23 +1,22 @@
 import axios from "axios";
 
+const API_URL = "http://localhost:8080/errors";
+
 export async function captureDuck(error, extra = {}) {
   try {
-    const errorObj = {
-      message: error.message || "Unknown error",
-      stack: error.stack || null,
-      url: extra.url || window.location.href,
+    await axios.post(API_URL, {
+      message: error.message || "Unknown frontend error",
+      stack: error.stack,
+      url: window.location.href,
       userAgent: navigator.userAgent,
       type: "frontend",
-      timestamp: new Date().toISOString(),
-    };
-
-    await axios.post("http://localhost:8080/errors", errorObj);
-
-    console.log("Frontend error sent");
+      ...extra,
+    });
   } catch (err) {
-    console.error("Failed to report frontend error", err);
+    console.error("Failed to send error:", err);
   }
 }
+
 export function initErrorTracking() {
   // JS errors
   window.onerror = function (message, source, lineno, colno, error) {
