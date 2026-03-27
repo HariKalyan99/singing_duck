@@ -19,18 +19,30 @@ const App = () => {
   const triggerBackendError = async () => {
     try {
       await axios.get("http://localhost:8080/test-error");
-      await fetchAllErrors();
     } catch (error) {
       console.error(error);
+    } finally {
+      await fetchAllErrors();
     }
   };
 
   const triggerBackendPromiseError = async () => {
     try {
       await axios.get("http://localhost:8080/test-promise-error");
-      await fetchAllErrors();
     } catch (error) {
       console.error(error);
+    } finally {
+      await fetchAllErrors();
+    }
+  };
+
+  const triggerProcutsError = async () => {
+    try {
+      await axios.get("http://localhost:8080/products");
+    } catch (error) {
+      console.error(error);
+    } finally {
+      await fetchAllErrors();
     }
   };
 
@@ -40,8 +52,19 @@ const App = () => {
       return obj.name;
     } catch (err) {
       await captureDuck(err, { context: "myFunction" });
+    } finally {
       await fetchAllErrors();
     }
+  };
+
+  const clearErrors = async () => {
+    try {
+      await axios.delete("http://localhost:8080/errors");
+    } catch (error) {
+      console.error(error);
+    }
+
+    await fetchAllErrors(); // no need finally if always after
   };
 
   const formatTime = (timestamp) => {
@@ -70,6 +93,12 @@ const App = () => {
 
         <div className="flex gap-2">
           <button
+            onClick={clearErrors}
+            className="px-4 py-2 text-sm text-black rounded-lg shadow-md hover:bg-gray-300 transition underline"
+          >
+            Clear errors
+          </button>
+          <button
             onClick={triggerBackendError}
             className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
           >
@@ -87,6 +116,12 @@ const App = () => {
             className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
           >
             Trigger Frontend Error
+          </button>
+          <button
+            onClick={triggerProcutsError}
+            className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
+          >
+            Trigger Products Error
           </button>
         </div>
       </div>

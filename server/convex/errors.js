@@ -38,3 +38,14 @@ export const getRecentErrors = query({
       .take(50);
   },
 });
+
+export const clearErrors = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const errors = await ctx.db.query("errors").collect();
+
+    await Promise.all(errors.map((err) => ctx.db.delete(err._id)));
+
+    return { success: true, deletedCount: errors.length };
+  },
+});

@@ -9,6 +9,7 @@ import captureDuck from "./main/captureDuck.js";
 
 import { api } from "./convex/_generated/api.js";
 import { getConvex } from "./src/lib/convex.js";
+import axios from "axios";
 
 const convex = getConvex();
 
@@ -71,6 +72,15 @@ app.get("/errors", async (req, res) => {
   }
 });
 
+app.delete("/errors", async (req, res) => {
+  try {
+    await convex.mutation(api.errors.clearErrors);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
 /**
  * GROUPED ERRORS (server-side grouping)
  */
@@ -102,7 +112,7 @@ app.get("/all-errors", async (req, res) => {
 app.get("/test-error", async (req, res) => {
   await (async function anotherService() {
     const err = new Error("failure in service");
-    await captureDuck(err, { url: "anotherService" });
+    await captureDuck(err, { url: "/test-error" });
   })();
 
   res.status(200).json({ message: "Triggered manual error" });
@@ -114,12 +124,30 @@ app.get("/test-promise-error", async (req, res) => {
   await new Promise((_, reject) => {
     reject(new Error("Manual promise error"));
   }).catch(async (err) => {
-    await captureDuck(err, { url: "promiseService" });
+    await captureDuck(err, { url: "/promiseService" });
   });
 
   res.status(200).json({ message: "Promise handled manually" });
 });
 
+app.use("/products", async (req, res, next) => {
+  try {
+    const { data } = await axios.get("https://dummyjson.com/products");
+
+    if (!Array.isArray(data.products.id)) {
+      throw new Error("Invalid API response: products is not an array");
+    }
+
+    if (!data.products.length) {
+      throw new Error("No products found");
+    }
+
+    return res.status(200).json(data.products[0].id);
+  } catch (error) {
+    await captureDuck(error, { url: "/products" });
+    return res.status(500).json({ error: "internal server error" });
+  }
+});
 /**
  * GLOBAL ERROR MIDDLEWARE
  */
