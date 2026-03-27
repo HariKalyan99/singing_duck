@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { captureDuck } from "./sdk/errorTracker";
+import { useEffect } from "react";
 
 const App = () => {
   const [errors, setErrors] = useState([]);
@@ -46,6 +47,13 @@ const App = () => {
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString();
   };
+
+  useEffect(() => {
+    fetchAllErrors();
+
+    // const interval = setInterval(fetchAllErrors, 3000);
+    // return () => clearInterval(interval);
+  }, []);
 
   // we can also add a polling server!
 
@@ -93,8 +101,33 @@ const App = () => {
       {/* Error List */}
       <div className="space-y-4">
         {errors.map((item, index) => {
+          const normalizeStack = (stack) => {
+            if (!stack) return [];
+
+            // Already array
+            if (Array.isArray(stack)) return stack;
+
+            // If string, try parsing
+            if (typeof stack === "string") {
+              try {
+                const parsed = JSON.parse(stack);
+
+                // If parsed is array → good
+                if (Array.isArray(parsed)) return parsed;
+
+                return [];
+              } catch {
+                return [];
+              }
+            }
+
+            return [];
+          };
           const error = item.error;
           const isOpen = expanded === index;
+
+          const parsedStack = normalizeStack(error.stack);
+          const firstFrame = parsedStack.find((f) => f?.file);
 
           return (
             <div
@@ -106,9 +139,10 @@ const App = () => {
               <div className="flex justify-between items-center px-6 py-4">
                 <div>
                   <h3 className="text-gray-800 font-medium">{error.message}</h3>
-                  {error.type === "backend" && (
+                  {error.type === "backend" && firstFrame && (
                     <p className="text-xs text-gray-400 mt-1">
-                      {error.stack?.[0]?.file} : {error.stack?.[0]?.line}
+                      {firstFrame.file.replace("file://", "")} :{" "}
+                      {firstFrame.line}
                     </p>
                   )}
                 </div>
