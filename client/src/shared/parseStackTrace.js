@@ -1,4 +1,4 @@
-function parseStackTrace(stack) {
+export function parseStackTrace(stack) {
   if (!stack) return [];
 
   return stack
@@ -32,5 +32,3 @@ function parseStackTrace(stack) {
     })
     .filter(Boolean);
 }
-
-export default parseStackTrace;

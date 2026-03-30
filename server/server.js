@@ -24,30 +24,45 @@ app.use(express.json());
  */
 app.post("/errors", async (req, res) => {
   try {
-    const { message, stack, url, userAgent, type = "frontend" } = req.body;
+    const {
+      message,
+      stack,
+      url,
+      parsedStack,
+      userAgent,
+      type = "frontend",
+    } = req.body;
 
     const errorObject = {
       id: crypto.randomUUID(),
       message,
-      stack,
       rawStack: stack,
       url,
       userAgent,
       type,
+      parsedStack,
       timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || "development",
     };
 
     errorObject.fingerPrint = getFingerPrint(errorObject);
 
     await convex.mutation(api.errors.reportError, {
       message: errorObject.message,
-      stack: JSON.stringify(errorObject.stack),
+
+      stack: errorObject.rawStack,
       rawStack: errorObject.rawStack,
+
       url: errorObject.url,
       userAgent: errorObject.userAgent,
       type: errorObject.type,
       timestamp: errorObject.timestamp,
+      environment: errorObject.environment,
       fingerPrint: errorObject.fingerPrint,
+
+      parsedStack: errorObject.parsedStack,
+
+      codeSnippet: undefined,
     });
 
     res.status(200).json({ success: true });

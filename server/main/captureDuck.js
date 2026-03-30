@@ -23,11 +23,12 @@ async function captureDuck(error, extra = {}) {
     const errorObj = {
       id: crypto.randomUUID(),
       message: error.message || "Unknown error",
-      stack: parsedStack,
+      stack: parsedStack, // we will remove this since we have parsed and raw
       rawStack: stack,
       url: extra.url || "backend",
       userAgent: "node-server",
       type: "backend",
+      environment: process.env.NODE_ENV || "development",
       codeSnippet,
       timestamp: new Date().toISOString(),
     };
@@ -36,16 +37,21 @@ async function captureDuck(error, extra = {}) {
 
     await convex.mutation(api.errors.reportError, {
       message: errorObj.message,
-      stack: JSON.stringify(errorObj.stack),
+
+      stack: errorObj.rawStack,
       rawStack: errorObj.rawStack,
+
       url: errorObj.url,
       userAgent: errorObj.userAgent,
       type: errorObj.type,
       timestamp: errorObj.timestamp,
       fingerPrint: errorObj.fingerPrint,
+      environment: errorObj.environment,
+
+      parsedStack: errorObj.stack,
+
       codeSnippet: codeSnippet || null,
     });
-
     console.log("Error stored in Convex:", errorObj.message);
   } catch (err) {
     console.error("Failed to capture error:", err.message);

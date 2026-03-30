@@ -1,12 +1,17 @@
 import axios from "axios";
+import { parseStackTrace } from "../shared/parseStackTrace";
 
 export async function captureDuck(error, extra = {}) {
   try {
+    const rawStack = error.stack || null;
+
+    const parsedStack = parseStackTrace(rawStack);
     const errorObj = {
       message: error.message || "Unknown error",
       stack: error.stack || null,
       url: extra.url || window.location.href,
       userAgent: navigator.userAgent,
+      parsedStack,
       type: "frontend",
       timestamp: new Date().toISOString(),
     };

@@ -11,6 +11,18 @@ export default defineSchema({
     type: v.string(),
     timestamp: v.string(),
     fingerPrint: v.string(),
+    environment: v.string(),
+    parsedStack: v.optional(
+      v.array(
+        v.object({
+          function: v.optional(v.string()),
+          file: v.string(),
+          line: v.number(),
+          column: v.optional(v.number()),
+          isAsync: v.optional(v.boolean()),
+        }),
+      ),
+    ),
     codeSnippet: v.optional(
       v.array(
         v.object({
