@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 import axios from "axios";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { captureDuck } from "./sdk/errorTracker";
 import { useEffect } from "react";
 
@@ -363,6 +365,7 @@ const App = () => {
 
           const parsedStack = normalizeStack(error.stack);
           const firstFrame = parsedStack.find((f) => f?.file);
+          const extension = firstFrame?.file?.split(".").pop();
 
           return (
             <div
@@ -428,7 +431,7 @@ const App = () => {
                       className="rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {/* Fake IDE Header */}
+                      {/* IDE Header */}
                       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800">
                         <div className="flex gap-2">
                           <div className="w-3 h-3 bg-red-500 rounded-full" />
@@ -436,33 +439,46 @@ const App = () => {
                           <div className="w-3 h-3 bg-green-500 rounded-full" />
                         </div>
 
-                        <span className="text-gray-400 text-xs font-mono">
+                        <span className="text-gray-400 text-xs font-mono truncate">
                           {firstFrame?.file || "source.js"}
                         </span>
                       </div>
 
-                      <pre className="text-xs font-mono text-gray-200 overflow-x-auto">
-                        {error.codeSnippet.map((line) => (
-                          <div
-                            key={line.lineNumber}
-                            className={`flex ${
-                              line.isErrorLine
-                                ? "bg-red-500/15 border-l-4 border-red-500"
-                                : "hover:bg-white/5"
-                            }`}
-                          >
-                            {/* Line Number */}
-                            <span className="w-14 shrink-0 text-right pr-4 text-gray-500 select-none bg-black/40">
-                              {line.lineNumber}
-                            </span>
+                      <SyntaxHighlighter
+                        language="javascript"
+                        style={oneDark}
+                        showLineNumbers
+                        wrapLines={true}
+                        startingLineNumber={
+                          error.codeSnippet[0]?.lineNumber || 1
+                        }
+                        customStyle={{
+                          margin: 0,
+                          padding: "16px",
+                          fontSize: "12px",
+                          background: "#000",
+                        }}
+                        lineProps={(lineNumber) => {
+                          const match = error.codeSnippet.find(
+                            (l) => l.lineNumber === lineNumber && l.isErrorLine,
+                          );
 
-                            {/* Code Content */}
-                            <span className="flex-1 whitespace-pre px-2 py-1">
-                              {line.content}
-                            </span>
-                          </div>
-                        ))}
-                      </pre>
+                          if (match) {
+                            return {
+                              style: {
+                                backgroundColor: "rgba(239, 68, 68, 0.15)",
+                                borderLeft: "4px solid #ef4444",
+                              },
+                            };
+                          }
+
+                          return {};
+                        }}
+                      >
+                        {error.codeSnippet
+                          .map((line) => line.content)
+                          .join("\n")}
+                      </SyntaxHighlighter>
                     </div>
                   )}
 
