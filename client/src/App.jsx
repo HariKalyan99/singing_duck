@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import axios from "axios";
 import { captureDuck } from "./sdk/errorTracker";
 import { useEffect } from "react";
@@ -6,6 +6,13 @@ import { useEffect } from "react";
 const App = () => {
   const [errors, setErrors] = useState([]);
   const [expanded, setExpanded] = useState(null);
+
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("latest");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [isSticky, setIsSticky] = useState(false);
 
   const fetchAllErrors = async () => {
     try {
@@ -78,6 +85,86 @@ const App = () => {
     // return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsSticky(window.scrollY > 0);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const filteredErrors = useMemo(() => {
+    return errors
+      .filter((item) => {
+        const { error, occurrences = [] } = item;
+
+        // 🔍 Search filter
+        const matchesSearch = error.message
+          ?.toLowerCase()
+          .includes(search.toLowerCase());
+
+        // 🏷 Type filter
+        const matchesType = typeFilter === "all" || error.type === typeFilter;
+
+        // 🕒 Time filter logic (IMPORTANT PART)
+        let matchesTime = true;
+
+        if (fromDate || toDate) {
+          // If occurrences exist, use latest occurrence
+          const latestTimestamp =
+            occurrences.length > 0
+              ? new Date(
+                  Math.max(
+                    ...occurrences.map((o) => new Date(o.timestamp).getTime()),
+                  ),
+                )
+              : new Date(error.timestamp);
+
+          if (fromDate) {
+            matchesTime = matchesTime && latestTimestamp >= new Date(fromDate);
+          }
+
+          if (toDate) {
+            matchesTime = matchesTime && latestTimestamp <= new Date(toDate);
+          }
+        }
+
+        return matchesSearch && matchesType && matchesTime;
+      })
+      .sort((a, b) => {
+        if (sortBy === "latest") {
+          const aTime = new Date(
+            a.occurrences?.length
+              ? Math.max(
+                  ...a.occurrences.map((o) => new Date(o.timestamp).getTime()),
+                )
+              : a.error.timestamp,
+          );
+
+          const bTime = new Date(
+            b.occurrences?.length
+              ? Math.max(
+                  ...b.occurrences.map((o) => new Date(o.timestamp).getTime()),
+                )
+              : b.error.timestamp,
+          );
+
+          return bTime - aTime;
+        }
+
+        if (sortBy === "oldest") {
+          return new Date(a.error.timestamp) - new Date(b.error.timestamp);
+        }
+
+        if (sortBy === "most") {
+          return b.count - a.count;
+        }
+
+        return 0;
+      });
+  }, [errors, search, typeFilter, fromDate, toDate, sortBy]);
+
   // we can also add a polling server!
 
   return (
@@ -126,16 +213,129 @@ const App = () => {
         </div>
       </div>
 
-      {/* Empty State */}
-      {!errors.length && (
-        <div className="text-center py-20 text-gray-400">
-          No errors detected
+      {/* Stats Bar */}
+      <div className="grid grid-cols-4 gap-6 mb-10">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+          <p className="text-xs text-gray-400">Total Errors</p>
+          <p className="text-3xl font-semibold mt-2">{errors.length}</p>
         </div>
-      )}
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+          <p className="text-xs text-gray-400">Frontend</p>
+          <p className="text-3xl font-semibold mt-2 text-blue-600">
+            {errors.filter((e) => e.error.type === "frontend").length}
+          </p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+          <p className="text-xs text-gray-400">Backend</p>
+          <p className="text-3xl font-semibold mt-2 text-red-600">
+            {errors.filter((e) => e.error.type === "backend").length}
+          </p>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+          <p className="text-xs text-gray-400">Most Frequent</p>
+          <p className="text-3xl font-semibold mt-2">
+            {Math.max(...errors.map((e) => e.count), 0)}
+          </p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div
+        className={`bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/80 
+  p-6 rounded-2xl border border-gray-200 mb-8 sticky top-0 z-10 
+  transition-all duration-300 ${
+    isSticky ? "shadow-xl ring-1 ring-black/5" : "shadow-sm"
+  }`}
+      >
+        {/* Top Row */}
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Search */}
+          <div className="flex-1 min-w-[240px]">
+            <input
+              type="text"
+              placeholder="Search errors..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm 
+        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Type */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-4 py-2 rounded-xl border border-gray-200 text-sm 
+      focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Types</option>
+            <option value="backend">Backend</option>
+            <option value="frontend">Frontend</option>
+          </select>
+
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-4 py-2 rounded-xl border border-gray-200 text-sm 
+      focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="latest">Latest</option>
+            <option value="oldest">Oldest</option>
+            <option value="most">Most Occurrences</option>
+          </select>
+
+          {/* Reset */}
+          <button
+            onClick={() => {
+              setSearch("");
+              setTypeFilter("all");
+              setSortBy("latest");
+              setFromDate("");
+              setToDate("");
+            }}
+            className="px-4 py-2 rounded-xl text-sm border border-gray-200 
+      hover:bg-gray-50 transition"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="my-6 border-t border-gray-100" />
+
+        {/* Time Filters */}
+        <div className="flex flex-wrap gap-6">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">From</label>
+            <input
+              type="datetime-local"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm 
+        focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">To</label>
+            <input
+              type="datetime-local"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm 
+        focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Error List */}
       <div className="space-y-4">
-        {errors.map((item, index) => {
+        {filteredErrors.map((item, index) => {
           const normalizeStack = (stack) => {
             if (!stack) return [];
 
@@ -168,33 +368,35 @@ const App = () => {
             <div
               key={index}
               onClick={() => setExpanded(isOpen ? null : index)}
-              className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition cursor-pointer"
+              className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer"
             >
               {/* Top Row */}
-              <div className="flex justify-between items-center px-6 py-4">
-                <div>
-                  <h3 className="text-gray-800 font-medium">{error.message}</h3>
-                  {error.type === "backend" && firstFrame && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      {firstFrame.file.replace("file://", "")} :{" "}
-                      {firstFrame.line}
-                    </p>
-                  )}
+              <div className="flex justify-between items-start px-6 py-5">
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-gray-900 font-semibold text-lg leading-snug">
+                    {error.message}
+                  </h3>
+
+                  <div className="flex gap-3 items-center text-xs text-gray-400">
+                    <span>{formatTime(error.timestamp)}</span>
+                    <span>•</span>
+                    <span className="truncate max-w-xs">{error.url}</span>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-gray-500">
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-xs text-gray-400">
                     {item.count} occurrences
                   </span>
 
                   <span
-                    className={`text-xs px-3 py-1 rounded-full ${
+                    className={`text-xs px-3 py-1 rounded-full font-medium ${
                       error.type === "backend"
-                        ? "bg-red-100 text-red-600"
-                        : "bg-blue-100 text-blue-600"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-blue-100 text-blue-700"
                     }`}
                   >
-                    {error.type}
+                    {error.type.toUpperCase()}
                   </span>
                 </div>
               </div>
@@ -222,21 +424,42 @@ const App = () => {
 
                   {/* Code Snippet */}
                   {error?.codeSnippet && (
-                    <div className="rounded-lg overflow-hidden border border-gray-800">
-                      <pre className="bg-black text-gray-200 text-xs p-4 overflow-x-auto">
+                    <div
+                      className="rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Fake IDE Header */}
+                      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800">
+                        <div className="flex gap-2">
+                          <div className="w-3 h-3 bg-red-500 rounded-full" />
+                          <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+                          <div className="w-3 h-3 bg-green-500 rounded-full" />
+                        </div>
+
+                        <span className="text-gray-400 text-xs font-mono">
+                          {firstFrame?.file || "source.js"}
+                        </span>
+                      </div>
+
+                      <pre className="text-xs font-mono text-gray-200 overflow-x-auto">
                         {error.codeSnippet.map((line) => (
                           <div
                             key={line.lineNumber}
                             className={`flex ${
                               line.isErrorLine
-                                ? "bg-red-500/20 border-l-4 border-red-500"
-                                : ""
+                                ? "bg-red-500/15 border-l-4 border-red-500"
+                                : "hover:bg-white/5"
                             }`}
                           >
-                            <span className="w-10 text-right pr-3 text-gray-500 select-none">
+                            {/* Line Number */}
+                            <span className="w-14 shrink-0 text-right pr-4 text-gray-500 select-none bg-black/40">
                               {line.lineNumber}
                             </span>
-                            <span>{line.content}</span>
+
+                            {/* Code Content */}
+                            <span className="flex-1 whitespace-pre px-2 py-1">
+                              {line.content}
+                            </span>
                           </div>
                         ))}
                       </pre>
@@ -261,6 +484,13 @@ const App = () => {
             </div>
           );
         })}
+        {!filteredErrors.length && (
+          <div className="bg-white p-20 rounded-2xl border shadow-sm text-center">
+            <p className="text-gray-400 text-lg">
+              No errors match your filters
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
