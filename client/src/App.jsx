@@ -7,7 +7,7 @@ import { useEffect } from "react";
 
 const App = () => {
   const [errors, setErrors] = useState([]);
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState(0);
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
