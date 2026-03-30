@@ -4,3 +4,7 @@
 4. optimize
 5. better UI/UX
 6. ttl logic, and LRU cache!
+7.send all the console loggers and what ever the params are available such as arguements within that block ex: (req, res) 
+send all those, but only get those when in the UI I have a codemirror where I can log them so then hit the api and then will I be able to see the logs: two things
+ - show the logger errors
+ - add console.log from UI to hit the api to get the nearby arguements passed save them in DB when the api was requested and then I would like that to showcase when logged from UI
