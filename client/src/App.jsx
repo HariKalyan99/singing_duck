@@ -16,6 +16,10 @@ const App = () => {
   const [toDate, setToDate] = useState("");
   const [isSticky, setIsSticky] = useState(false);
 
+  const [expandedId, setExpandedId] = useState(null);
+  const [loadingSnippet, setLoadingSnippet] = useState(false);
+  const [fullSnippets, setFullSnippets] = useState({});
+
   const fetchAllErrors = async () => {
     try {
       const { data } = await axios.get("http://localhost:8080/all-errors");
@@ -167,6 +171,39 @@ const App = () => {
       });
   }, [errors, search, typeFilter, fromDate, toDate, sortBy]);
 
+  const handleExpand = async (errorId) => {
+    if (expandedId === errorId) {
+      setExpandedId(null);
+      return;
+    }
+
+    // Already cached
+    if (fullSnippets[errorId]) {
+      setExpandedId(errorId);
+      return;
+    }
+
+    try {
+      setLoadingSnippet(true);
+
+      const res = await fetch(
+        `http://localhost:8080/error/${errorId}/full-snippet`,
+      );
+      const data = await res.json();
+
+      if (data.success) {
+        setFullSnippets((prev) => ({
+          ...prev,
+          [errorId]: data.codeSnippet,
+        }));
+        setExpandedId(errorId);
+      }
+    } catch (err) {
+      console.error("Failed to load full snippet", err);
+    } finally {
+      setLoadingSnippet(false);
+    }
+  };
   // we can also add a polling server!
 
   return (
@@ -367,9 +404,15 @@ const App = () => {
           const firstFrame = parsedStack.find((f) => f?.file);
           const extension = firstFrame?.file?.split(".").pop();
 
+          const snippetToRender =
+            expandedId === error._id && fullSnippets[error._id]
+              ? fullSnippets[error._id]
+              : error.codeSnippet;
+
+          const hasMoreContext = error.codeSnippet?.length >= 10;
           return (
             <div
-              key={index}
+              key={error._id}
               onClick={() => setExpanded(isOpen ? null : index)}
               className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer"
             >
@@ -443,15 +486,29 @@ const App = () => {
                           {firstFrame?.file || "source.js"}
                         </span>
                       </div>
+                      {/* Expand / Collapse */}
+                      {hasMoreContext && (
+                        <div className="flex justify-center bg-gray-950 border-b border-gray-800">
+                          <button
+                            disabled={
+                              loadingSnippet && expandedId !== error._id
+                            }
+                            onClick={() => handleExpand(error._id)}
+                            className="text-gray-400 hover:text-white text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {expandedId === error._id
+                              ? "▲ Show Less"
+                              : "▼ Show More Context"}
+                          </button>
+                        </div>
+                      )}
 
                       <SyntaxHighlighter
                         language={extension || "javascript"}
                         style={oneDark}
                         showLineNumbers
                         wrapLines={true}
-                        startingLineNumber={
-                          error.codeSnippet[0]?.lineNumber || 1
-                        }
+                        startingLineNumber={snippetToRender[0]?.lineNumber || 1}
                         customStyle={{
                           margin: 0,
                           padding: "16px",
@@ -459,7 +516,7 @@ const App = () => {
                           background: "#000",
                         }}
                         lineProps={(lineNumber) => {
-                          const match = error.codeSnippet.find(
+                          const match = snippetToRender.find(
                             (l) => l.lineNumber === lineNumber && l.isErrorLine,
                           );
 
@@ -475,9 +532,7 @@ const App = () => {
                           return {};
                         }}
                       >
-                        {error.codeSnippet
-                          .map((line) => line.content)
-                          .join("\n")}
+                        {snippetToRender.map((line) => line.content).join("\n")}
                       </SyntaxHighlighter>
                     </div>
                   )}

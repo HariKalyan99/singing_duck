@@ -49,3 +49,12 @@ export const clearErrors = mutation({
     return { success: true, deletedCount: errors.length };
   },
 });
+
+export const getErrorById = query({
+  args: {
+    id: v.id("errors"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});

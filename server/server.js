@@ -10,6 +10,7 @@ import captureDuck from "./main/captureDuck.js";
 import { api } from "./convex/_generated/api.js";
 import { getConvex } from "./src/lib/convex.js";
 import axios from "axios";
+import trimSnippet from "./helper/trimSnippet.js";
 
 const convex = getConvex();
 
@@ -62,9 +63,14 @@ app.post("/errors", async (req, res) => {
 app.get("/errors", async (req, res) => {
   try {
     const errors = await convex.query(api.errors.getRecentErrors);
+    const formatted = errors.map((err) => ({
+      ...err,
+      codeSnippet: trimSnippet(err.codeSnippet, 5),
+    }));
+
     res.status(200).json({
       success: true,
-      data: errors,
+      data: formatted,
     });
   } catch (err) {
     console.error("Failed to fetch errors:", err);
@@ -93,7 +99,10 @@ app.get("/all-errors", async (req, res) => {
       if (!grouped[err.fingerPrint]) {
         grouped[err.fingerPrint] = {
           count: 0,
-          error: err,
+          error: {
+            ...err,
+            codeSnippet: trimSnippet(err.codeSnippet, 5),
+          },
         };
       }
       grouped[err.fingerPrint].count++;
@@ -106,6 +115,28 @@ app.get("/all-errors", async (req, res) => {
   }
 });
 
+app.get("/error/:id/full-snippet", async (req, res) => {
+  try {
+    const error = await convex.query(api.errors.getErrorById, {
+      id: req.params.id,
+    });
+
+    if (!error) {
+      return res.status(404).json({
+        success: false,
+        message: "Error not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      codeSnippet: error.codeSnippet || [],
+    });
+  } catch (err) {
+    console.error("Failed to fetch full snippet:", err);
+    res.status(500).json({ success: false });
+  }
+});
 /**
  * TEST MANUAL ERROR
  */
