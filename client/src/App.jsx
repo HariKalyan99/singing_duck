@@ -445,7 +445,7 @@ const App = () => {
                       </div>
 
                       <SyntaxHighlighter
-                        language="javascript"
+                        language={extension || "javascript"}
                         style={oneDark}
                         showLineNumbers
                         wrapLines={true}
