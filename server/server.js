@@ -11,6 +11,8 @@ import { api } from "./convex/_generated/api.js";
 import { getConvex } from "./src/lib/convex.js";
 import axios from "axios";
 import trimSnippet from "./helper/trimSnippet.js";
+import { fetchFirstProduct } from "./services/productService.js";
+import { replayService } from "./services/replayService.js";
 
 const convex = getConvex();
 
@@ -176,24 +178,69 @@ app.get("/test-promise-error", async (req, res) => {
   res.status(200).json({ message: "Promise handled manually" });
 });
 
-app.use("/products", async (req, res, next) => {
+// app.use("/products", async (req, res, next) => {
+//   try {
+//     const { data } = await axios.get("https://dummyjson.com/products");
+
+//     if (!Array.isArray(data.products.id)) {
+//       throw new Error("Invalid API response: products is not an array");
+//     }
+
+//     if (!data.products.length) {
+//       throw new Error("No products found");
+//     }
+
+//     return res.status(200).json(data.products[0].id);
+//   } catch (error) {
+//     await captureDuck(error, { url: "/products" });
+//     return res.status(500).json({ error: "internal server error" });
+//   }
+// });
+
+app.get("/products", async (req, res, next) => {
   try {
-    const { data } = await axios.get("https://dummyjson.com/products");
-
-    if (!Array.isArray(data.products.id)) {
-      throw new Error("Invalid API response: products is not an array");
-    }
-
-    if (!data.products.length) {
-      throw new Error("No products found");
-    }
-
-    return res.status(200).json(data.products[0].id);
+    const result = await fetchFirstProduct(null, {});
+    return res.status(200).json(result);
   } catch (error) {
-    await captureDuck(error, { url: "/products" });
+    await captureDuck(error, {
+      url: "/products",
+      serviceContext: {
+        service: "fetchFirstProduct",
+        payload: null,
+        context: {},
+      },
+    });
+
     return res.status(500).json({ error: "internal server error" });
   }
 });
+
+app.post("/errors/:id/replay-service", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({
+      message: "Replay disabled in production",
+    });
+  }
+
+  try {
+    const error = await convex.query(api.errors.getErrorById, {
+      id: req.params.id,
+    });
+
+    const result = await replayService(error, { dryRun: true });
+
+    res.json({
+      success: true,
+      result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
 /**
  * GLOBAL ERROR MIDDLEWARE
  */

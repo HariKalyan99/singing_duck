@@ -12,6 +12,7 @@ export const reportError = mutation({
     timestamp: v.string(),
     fingerPrint: v.string(),
     environment: v.string(),
+
     parsedStack: v.optional(
       v.array(
         v.object({
@@ -23,6 +24,7 @@ export const reportError = mutation({
         }),
       ),
     ),
+
     codeSnippet: v.optional(
       v.array(
         v.object({
@@ -31,6 +33,14 @@ export const reportError = mutation({
           isErrorLine: v.boolean(),
         }),
       ),
+    ),
+
+    serviceContext: v.optional(
+      v.object({
+        service: v.string(),
+        payload: v.optional(v.any()),
+        context: v.optional(v.any()),
+      }),
     ),
   },
 

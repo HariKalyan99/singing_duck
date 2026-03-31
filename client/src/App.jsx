@@ -20,6 +20,9 @@ const App = () => {
   const [loadingSnippet, setLoadingSnippet] = useState(false);
   const [fullSnippets, setFullSnippets] = useState({});
 
+  const [replayingId, setReplayingId] = useState(null);
+  const [replayResult, setReplayResult] = useState(null);
+
   const fetchAllErrors = async () => {
     try {
       const { data } = await axios.get("http://localhost:8080/all-errors");
@@ -202,6 +205,32 @@ const App = () => {
       console.error("Failed to load full snippet", err);
     } finally {
       setLoadingSnippet(false);
+    }
+  };
+
+  const handleReplay = async (errorId) => {
+    try {
+      setReplayingId(errorId);
+      setReplayResult(null);
+
+      const { data } = await axios.post(
+        `http://localhost:8080/errors/${errorId}/replay-service`,
+      );
+
+      setReplayResult({
+        success: true,
+        data,
+      });
+
+      // refresh errors after replay
+      await fetchAllErrors();
+    } catch (err) {
+      setReplayResult({
+        success: false,
+        message: err.response?.data?.message || err.message || "Replay failed",
+      });
+    } finally {
+      setReplayingId(null);
     }
   };
   // we can also add a polling server!
@@ -550,6 +579,37 @@ const App = () => {
                       {error.rawStack}
                     </pre>
                   </details>
+
+                  {error.type === "backend" && (
+                    <div
+                      className="mt-6 flex items-center gap-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => handleReplay(error._id)}
+                        disabled={replayingId === error._id}
+                        className="px-4 py-2 text-xs bg-black text-white rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
+                      >
+                        {replayingId === error._id
+                          ? "Replaying..."
+                          : "Replay Service"}
+                      </button>
+                    </div>
+                  )}
+
+                  {replayResult && replayingId !== error._id && (
+                    <div className="mt-4 text-xs">
+                      {replayResult.success ? (
+                        <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg">
+                          Replay succeeded
+                        </div>
+                      ) : (
+                        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg">
+                          Replay failed: {replayResult.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -12,6 +12,13 @@ export default defineSchema({
     timestamp: v.string(),
     fingerPrint: v.string(),
     environment: v.string(),
+    serviceContext: v.optional(
+      v.object({
+        service: v.string(),
+        payload: v.any(),
+        context: v.optional(v.any()),
+      }),
+    ),
     parsedStack: v.optional(
       v.array(
         v.object({

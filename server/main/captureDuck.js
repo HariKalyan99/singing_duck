@@ -31,6 +31,7 @@ async function captureDuck(error, extra = {}) {
       environment: process.env.NODE_ENV || "development",
       codeSnippet,
       timestamp: new Date().toISOString(),
+      serviceContext: extra.serviceContext || undefined,
     };
 
     errorObj.fingerPrint = getFingerPrint(errorObj);
@@ -51,6 +52,7 @@ async function captureDuck(error, extra = {}) {
       parsedStack: errorObj.stack,
 
       codeSnippet: codeSnippet || null,
+      serviceContext: errorObj.serviceContext,
     });
     console.log("Error stored in Convex:", errorObj.message);
   } catch (err) {
