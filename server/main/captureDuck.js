@@ -20,6 +20,16 @@ async function captureDuck(error, extra = {}) {
       codeSnippet = getCodeSnippet(topFrame.file, topFrame.line);
     }
 
+    const defaultServiceContext = {
+      // Mark generic backend captures as non-replayable.
+      service: "nonReplayable",
+      payload: null,
+      context: {
+        url: extra.url || "backend",
+      },
+      replayable: false,
+    };
+
     const errorObj = {
       id: crypto.randomUUID(),
       message: error.message || "Unknown error",
@@ -31,7 +41,7 @@ async function captureDuck(error, extra = {}) {
       environment: process.env.NODE_ENV || "development",
       codeSnippet,
       timestamp: new Date().toISOString(),
-      serviceContext: extra.serviceContext || undefined,
+      serviceContext: extra.serviceContext || defaultServiceContext,
     };
 
     errorObj.fingerPrint = getFingerPrint(errorObj);
@@ -52,6 +62,7 @@ async function captureDuck(error, extra = {}) {
       parsedStack: errorObj.stack,
 
       codeSnippet: codeSnippet || null,
+      originalCodeSnippet: codeSnippet || null,
       serviceContext: errorObj.serviceContext,
     });
     console.log("Error stored in Convex:", errorObj.message);

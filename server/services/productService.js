@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export async function fetchFirstProduct(_, context = {}) {
-  const { dryRun = false } = context;
+  const { dryRun = true } = context;
 
   if (dryRun) {
     return { simulated: true };

@@ -16,12 +16,14 @@ const App = () => {
   const [toDate, setToDate] = useState("");
   const [isSticky, setIsSticky] = useState(false);
 
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedOlderId, setExpandedOlderId] = useState(null);
+  const [expandedLatestId, setExpandedLatestId] = useState(null);
   const [loadingSnippet, setLoadingSnippet] = useState(false);
   const [fullSnippets, setFullSnippets] = useState({});
+  const [latestSnippets, setLatestSnippets] = useState({});
 
   const [replayingId, setReplayingId] = useState(null);
-  const [replayResult, setReplayResult] = useState(null);
+  const [replayResultsById, setReplayResultsById] = useState({});
 
   const fetchAllErrors = async () => {
     try {
@@ -174,18 +176,8 @@ const App = () => {
       });
   }, [errors, search, typeFilter, fromDate, toDate, sortBy]);
 
-  const handleExpand = async (errorId) => {
-    if (expandedId === errorId) {
-      setExpandedId(null);
-      return;
-    }
-
-    // Already cached
-    if (fullSnippets[errorId]) {
-      setExpandedId(errorId);
-      return;
-    }
-
+  const loadSnippets = async (errorId) => {
+    if (fullSnippets[errorId] && latestSnippets[errorId]) return;
     try {
       setLoadingSnippet(true);
 
@@ -193,13 +185,22 @@ const App = () => {
         `http://localhost:8080/error/${errorId}/full-snippet`,
       );
       const data = await res.json();
+      const latestRes = await fetch(
+        `http://localhost:8080/error/${errorId}/latest-snippet`,
+      );
+      const latestData = await latestRes.json();
 
       if (data.success) {
         setFullSnippets((prev) => ({
           ...prev,
           [errorId]: data.codeSnippet,
         }));
-        setExpandedId(errorId);
+        if (latestData.success) {
+          setLatestSnippets((prev) => ({
+            ...prev,
+            [errorId]: latestData.codeSnippet,
+          }));
+        }
       }
     } catch (err) {
       console.error("Failed to load full snippet", err);
@@ -208,27 +209,72 @@ const App = () => {
     }
   };
 
+  const handleOlderExpand = async (errorId) => {
+    if (expandedOlderId === errorId) {
+      setExpandedOlderId(null);
+      return;
+    }
+    await loadSnippets(errorId);
+    setExpandedOlderId(errorId);
+  };
+
+  const handleLatestExpand = async (errorId) => {
+    if (expandedLatestId === errorId) {
+      setExpandedLatestId(null);
+      return;
+    }
+    await loadSnippets(errorId);
+    setExpandedLatestId(errorId);
+  };
+
   const handleReplay = async (errorId) => {
     try {
       setReplayingId(errorId);
-      setReplayResult(null);
+      setReplayResultsById((prev) => ({
+        ...prev,
+        [errorId]: null,
+      }));
 
       const { data } = await axios.post(
         `http://localhost:8080/errors/${errorId}/replay-service`,
       );
 
-      setReplayResult({
-        success: true,
-        data,
-      });
+      setReplayResultsById((prev) => ({
+        ...prev,
+        [errorId]: {
+          success: true,
+          data: {
+            transactionId: data.transactionId,
+            attemptNumber: data.attemptNumber,
+            compared: data.compared,
+            isResolved: data.isResolved,
+            resolutionStatus: data.resolutionStatus,
+            stackTraceData: data.stackTraceData,
+          },
+        },
+      }));
+
+      const latestRes = await fetch(
+        `http://localhost:8080/error/${errorId}/latest-snippet`,
+      );
+      const latestData = await latestRes.json();
+      if (latestData.success) {
+        setLatestSnippets((prev) => ({
+          ...prev,
+          [errorId]: latestData.codeSnippet,
+        }));
+      }
 
       // refresh errors after replay
       await fetchAllErrors();
     } catch (err) {
-      setReplayResult({
-        success: false,
-        message: err.response?.data?.message || err.message || "Replay failed",
-      });
+      setReplayResultsById((prev) => ({
+        ...prev,
+        [errorId]: {
+          success: false,
+          message: err.response?.data?.message || err.message || "Replay failed",
+        },
+      }));
     } finally {
       setReplayingId(null);
     }
@@ -432,13 +478,27 @@ const App = () => {
           const parsedStack = normalizeStack(error.stack);
           const firstFrame = parsedStack.find((f) => f?.file);
           const extension = firstFrame?.file?.split(".").pop();
+          const isReplayable =
+            Boolean(error.serviceContext?.service) &&
+            error.serviceContext?.replayable !== false;
 
           const snippetToRender =
-            expandedId === error._id && fullSnippets[error._id]
+            expandedOlderId === error._id && fullSnippets[error._id]
               ? fullSnippets[error._id]
               : error.codeSnippet;
+          const latestSnippetSource = latestSnippets[error._id];
+          const latestSnippetToRender =
+            expandedLatestId === error._id
+              ? latestSnippetSource
+              : latestSnippetSource?.slice(0, 10);
 
           const hasMoreContext = error.codeSnippet?.length >= 10;
+          const latestReplayTx = item.latestReplayTx;
+          const replayResult = replayResultsById[error._id];
+          const effectiveResolutionStatus =
+            latestReplayTx?.resolutionStatus ||
+            error.resolutionStatus ||
+            (latestReplayTx?.isResolved ? "resolved" : undefined);
           return (
             <div
               key={error._id}
@@ -463,6 +523,19 @@ const App = () => {
                   <span className="text-xs text-gray-400">
                     {item.count} occurrences
                   </span>
+                  {effectiveResolutionStatus && (
+                    <span
+                      className={`text-xs px-3 py-1 rounded-full font-medium ${
+                        effectiveResolutionStatus === "resolved"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
+                      {effectiveResolutionStatus === "resolved"
+                        ? "RESOLVED"
+                        : "NOT YET RESOLVED"}
+                    </span>
+                  )}
 
                   <span
                     className={`text-xs px-3 py-1 rounded-full font-medium ${
@@ -503,6 +576,9 @@ const App = () => {
                       className="rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <div className="px-4 py-2 bg-red-900/40 border-b border-gray-800 text-red-300 text-xs font-medium">
+                        Older Snippet (Captured At Error Time)
+                      </div>
                       {/* IDE Header */}
                       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800">
                         <div className="flex gap-2">
@@ -520,12 +596,12 @@ const App = () => {
                         <div className="flex justify-center bg-gray-950 border-b border-gray-800">
                           <button
                             disabled={
-                              loadingSnippet && expandedId !== error._id
+                              loadingSnippet && expandedOlderId !== error._id
                             }
-                            onClick={() => handleExpand(error._id)}
+                            onClick={() => handleOlderExpand(error._id)}
                             className="text-gray-400 hover:text-white text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50"
                           >
-                            {expandedId === error._id
+                            {expandedOlderId === error._id
                               ? "▲ Show Less"
                               : "▼ Show More Context"}
                           </button>
@@ -565,6 +641,66 @@ const App = () => {
                       </SyntaxHighlighter>
                     </div>
                   )}
+                  {effectiveResolutionStatus === "resolved" &&
+                    latestReplayTx &&
+                    latestSnippetToRender?.length > 0 && (
+                    <div
+                      className="mt-4 rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="px-4 py-2 bg-green-900/40 border-b border-gray-800 text-green-300 text-xs font-medium">
+                        Latest Snippet (Current Code)
+                      </div>
+                      {latestSnippetSource?.length >= 10 && (
+                        <div className="flex justify-center bg-gray-950 border-b border-gray-800">
+                          <button
+                            disabled={
+                              loadingSnippet && expandedLatestId !== error._id
+                            }
+                            onClick={() => handleLatestExpand(error._id)}
+                            className="text-gray-400 hover:text-white text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {expandedLatestId === error._id
+                              ? "▲ Show Less"
+                              : "▼ Show More Context"}
+                          </button>
+                        </div>
+                      )}
+                      <SyntaxHighlighter
+                        language={extension || "javascript"}
+                        style={oneDark}
+                        showLineNumbers
+                        wrapLines={true}
+                        startingLineNumber={
+                          latestSnippetToRender[0]?.lineNumber || 1
+                        }
+                        customStyle={{
+                          margin: 0,
+                          padding: "16px",
+                          fontSize: "12px",
+                          background: "#000",
+                        }}
+                        lineProps={(lineNumber) => {
+                          const match = latestSnippetToRender.find(
+                            (l) => l.lineNumber === lineNumber && l.isErrorLine,
+                          );
+                          if (match) {
+                            return {
+                              style: {
+                                backgroundColor: "rgba(34, 197, 94, 0.15)",
+                                borderLeft: "4px solid #22c55e",
+                              },
+                            };
+                          }
+                          return {};
+                        }}
+                      >
+                        {latestSnippetToRender
+                          .map((line) => line.content)
+                          .join("\n")}
+                      </SyntaxHighlighter>
+                    </div>
+                  )}
 
                   {/* Stack Trace */}
                   <details
@@ -587,27 +723,98 @@ const App = () => {
                     >
                       <button
                         onClick={() => handleReplay(error._id)}
-                        disabled={replayingId === error._id}
-                        className="px-4 py-2 text-xs bg-black text-white rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
+                        disabled={replayingId === error._id || !isReplayable}
+                        className="px-4 py-2 text-xs bg-black text-white rounded-lg hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {replayingId === error._id
                           ? "Replaying..."
                           : "Replay Service"}
                       </button>
+
+                      <div className="text-xs text-gray-500">
+                        <p>Replay count: {error.replayCount || 0}</p>
+                        {latestReplayTx?.transactionId && (
+                          <p className="truncate max-w-md">
+                            Last tx: {latestReplayTx.transactionId}
+                          </p>
+                        )}
+                        {!isReplayable && (
+                          <p className="text-amber-600">
+                            Replay unavailable (non-replayable context)
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {replayResult && replayingId !== error._id && (
+                  {replayResult && (
                     <div className="mt-4 text-xs">
                       {replayResult.success ? (
                         <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg">
-                          Replay succeeded
+                          Replay succeeded | attempt #
+                          {replayResult.data?.attemptNumber || "n/a"} | tx{" "}
+                          {replayResult.data?.transactionId || "n/a"} | compared:{" "}
+                          {replayResult.data?.compared ? "yes" : "no"} | status:{" "}
+                          {replayResult.data?.resolutionStatus === "resolved"
+                            ? "Resolved"
+                            : "Not Yet Resolved"}
                         </div>
                       ) : (
                         <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg">
                           Replay failed: {replayResult.message}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {replayResult?.data?.stackTraceData &&
+                    (
+                      <div
+                        className="mt-3 text-xs border border-gray-200 bg-white rounded-lg p-3"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <p className="font-medium text-gray-700">
+                          Replay Stacktrace Comparison
+                        </p>
+                        <p className="text-gray-600 mt-1 break-all">
+                          Original fingerprint:{" "}
+                          {replayResult.data.stackTraceData.originalFingerPrint}
+                        </p>
+                        <p className="text-gray-600 break-all">
+                          Replay fingerprint:{" "}
+                          {replayResult.data.stackTraceData.replayFingerPrint}
+                        </p>
+                        <p className="text-gray-600">
+                          Original top frame:{" "}
+                          {replayResult.data.stackTraceData.originalTopFrame?.file ||
+                            "n/a"}
+                        </p>
+                      </div>
+                    )}
+
+                  {latestReplayTx && (
+                    <div
+                      className="mt-3 text-xs border border-gray-200 bg-white rounded-lg p-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="font-medium text-gray-700">
+                        Latest Replay Transaction
+                      </p>
+                      <p className="text-gray-600 mt-1">
+                        Status: {latestReplayTx.status}
+                      </p>
+                      <p className="text-gray-600">
+                        Attempt: {latestReplayTx.attemptNumber}
+                      </p>
+                      <p className="text-gray-600">
+                        Compared: {latestReplayTx.compared ? "yes" : "no"}
+                      </p>
+                      <p className="text-gray-600">
+                        Resolution:{" "}
+                        {latestReplayTx.resolutionStatus === "resolved" ||
+                        latestReplayTx.isResolved
+                          ? "Resolved"
+                          : "Not Yet Resolved"}
+                      </p>
                     </div>
                   )}
                 </div>

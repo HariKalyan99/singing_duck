@@ -38,6 +38,7 @@ export async function ingestFrontendError(payload, { convex }) {
     fingerPrint: errorObject.fingerPrint,
     parsedStack: errorObject.parsedStack,
     codeSnippet: undefined,
+    originalCodeSnippet: undefined,
   });
 
   return { success: true };
