@@ -361,7 +361,7 @@ const App = () => {
       }));
 
       const { data } = await axios.post(
-        `http://localhost:8080/products/errors/${errorId}/replay-service`,
+        `http://localhost:8080/errors/${errorId}/replay-service`,
       );
 
       setReplayResultsById((prev) => ({
@@ -678,32 +678,23 @@ const App = () => {
       {/* Error List */}
       <div className="space-y-4">
         {filteredErrors.map((item, index) => {
-          const normalizeStack = (stack) => {
-            if (!stack) return [];
-
-            // Already array
+          const normalizeStack = (stack, parsedStack) => {
+            if (Array.isArray(parsedStack)) return parsedStack;
             if (Array.isArray(stack)) return stack;
-
-            // If string, try parsing
             if (typeof stack === "string") {
               try {
                 const parsed = JSON.parse(stack);
-
-                // If parsed is array → good
-                if (Array.isArray(parsed)) return parsed;
-
-                return [];
+                return Array.isArray(parsed) ? parsed : [];
               } catch {
                 return [];
               }
             }
-
             return [];
           };
           const error = item.error;
           const isOpen = expanded === index;
 
-          const parsedStack = normalizeStack(error.stack);
+          const parsedStack = normalizeStack(error.stack, error.parsedStack);
           const firstFrame = parsedStack.find((f) => f?.file);
           const extension = firstFrame?.file?.split(".").pop();
 
@@ -722,6 +713,10 @@ const App = () => {
           const isProductServiceError =
             error.url === "/products/add" &&
             error.serviceContext?.service === "addProduct";
+          const isReplayableBackendError =
+            error.type === "backend" &&
+            Boolean(error.serviceContext?.service) &&
+            error.serviceContext?.replayable !== false;
           const replayResult = replayResultsById[error._id];
           const latestReplayTx = item.latestReplayTx || null;
           const hasReplayAttempt = Boolean(replayResult?.success || latestReplayTx);
@@ -733,7 +728,7 @@ const App = () => {
           const hasServicePayload = Boolean(error.serviceContext?.payload);
           const curlCommand = buildCurlFromError(error);
           const replayHoverText =
-            isProductServiceError && hasReplayAttempt
+            isReplayableBackendError && hasReplayAttempt
               ? isResolved
                 ? "Resolved"
                 : "Not Yet Resolved"
@@ -744,7 +739,7 @@ const App = () => {
               onClick={() => handleCardToggle(index, error._id)}
               title={replayHoverText}
               className={`bg-white border rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer ${
-                isProductServiceError && hasReplayAttempt
+                isReplayableBackendError && hasReplayAttempt
                   ? isResolved
                     ? "border-green-500"
                     : "border-red-500"
@@ -847,7 +842,7 @@ const App = () => {
                         </div>
 
                         <span className="text-gray-400 text-xs font-mono truncate">
-                          {firstFrame?.file || "source.js"}
+                          {firstFrame?.file || "File unavailable"}
                         </span>
                       </div>
                       <div className="px-4 py-2 bg-red-900/30 border-b border-gray-800 text-red-300 text-xs font-medium">
@@ -977,7 +972,7 @@ const App = () => {
                     </pre>
                   </details>
 
-                  {error.type === "backend" && isProductServiceError && (
+                  {isReplayableBackendError && (
                     <div
                       className="mt-6 flex items-center gap-3"
                       onClick={(e) => e.stopPropagation()}
@@ -989,7 +984,7 @@ const App = () => {
                       >
                         {replayingId === error._id
                           ? "Replaying..."
-                          : "Replay Product (Dry Run)"}
+                          : "Replay Service (Dry Run)"}
                       </button>
                     </div>
                   )}
