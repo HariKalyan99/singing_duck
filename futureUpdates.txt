@@ -65,3 +65,5 @@ send all those, but only get those when in the UI I have a codemirror where I ca
          Example:
    
 trx based replay service to be added 
+
+for session recordings - post hog - sentry like
