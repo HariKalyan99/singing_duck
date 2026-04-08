@@ -10,6 +10,7 @@ export async function ingestFrontendError(payload, { convex }) {
     parsedStack,
     userAgent,
     type = "frontend",
+    serviceContext,
   } = payload;
 
   const errorObject = {
@@ -38,6 +39,7 @@ export async function ingestFrontendError(payload, { convex }) {
     fingerPrint: errorObject.fingerPrint,
     parsedStack: errorObject.parsedStack,
     codeSnippet: undefined,
+    serviceContext,
   });
 
   return { success: true };

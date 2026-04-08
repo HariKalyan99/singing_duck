@@ -14,6 +14,21 @@ export async function captureDuck(error, extra = {}) {
       parsedStack,
       type: "frontend",
       timestamp: new Date().toISOString(),
+      serviceContext: {
+        service: extra.eventName || "frontend.captureDuck",
+        payload: {
+          event: extra.eventName || null,
+          source: extra.source || null,
+          lineno: extra.lineno || null,
+          colno: extra.colno || null,
+          context: extra.context || null,
+        },
+        context: {
+          route: window.location.pathname,
+          method: "CLIENT",
+        },
+        replayable: false,
+      },
     };
 
     await axios.post("http://localhost:8080/errors", errorObj);

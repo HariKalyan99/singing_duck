@@ -733,6 +733,11 @@ const App = () => {
                 ? "Resolved"
                 : "Not Yet Resolved"
               : "";
+          const eventSource =
+            error?.serviceContext?.service ||
+            error?.serviceContext?.context?.route ||
+            error?.url ||
+            "unknown";
           return (
             <div
               key={error._id}
@@ -795,6 +800,10 @@ const App = () => {
                     <div className="col-span-2">
                       <p className="text-gray-400 text-xs mb-1">User Agent</p>
                       <p className="break-words">{error.userAgent}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-gray-400 text-xs mb-1">Event Source</p>
+                      <p className="break-words font-mono text-xs">{eventSource}</p>
                     </div>
                   </div>
                   {hasServicePayload && (
