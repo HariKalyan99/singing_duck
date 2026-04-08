@@ -4,6 +4,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { captureDuck } from "./sdk/errorTracker";
 import { useEffect } from "react";
+import { Toaster, toast } from "react-hot-toast";
 
 const App = () => {
   const [errors, setErrors] = useState([]);
@@ -16,12 +17,25 @@ const App = () => {
   const [toDate, setToDate] = useState("");
   const [isSticky, setIsSticky] = useState(false);
 
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedOlderId, setExpandedOlderId] = useState(null);
+  const [expandedLatestId, setExpandedLatestId] = useState(null);
   const [loadingSnippet, setLoadingSnippet] = useState(false);
   const [fullSnippets, setFullSnippets] = useState({});
+  const [latestSnippets, setLatestSnippets] = useState({});
 
   const [replayingId, setReplayingId] = useState(null);
-  const [replayResult, setReplayResult] = useState(null);
+  const [replayResultsById, setReplayResultsById] = useState({});
+  const [showAddProductPopover, setShowAddProductPopover] = useState(false);
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [productForm, setProductForm] = useState({
+    title: "",
+    price: "",
+    category: "",
+    stock: "",
+    description: "",
+    simulateError: false,
+    triggerKnownBug: false,
+  });
 
   const fetchAllErrors = async () => {
     try {
@@ -52,12 +66,53 @@ const App = () => {
     }
   };
 
-  const triggerProcutsError = async () => {
+  const handleProductInput = (event) => {
+    const { name, value } = event.target;
+    setProductForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const resetProductForm = () => {
+    setProductForm({
+      title: "",
+      price: "",
+      category: "",
+      stock: "",
+      description: "",
+      simulateError: false,
+      triggerKnownBug: false,
+    });
+  };
+
+  const submitProduct = async (event) => {
+    event.preventDefault();
+    setIsSubmittingProduct(true);
+
     try {
-      await axios.get("http://localhost:8080/products");
+      const payload = {
+        title: productForm.title.trim(),
+        price: Number(productForm.price),
+        category: productForm.category.trim() || "general",
+        stock: Number(productForm.stock || 0),
+        description: productForm.description.trim(),
+        simulateError: productForm.simulateError,
+        triggerKnownBug: productForm.triggerKnownBug,
+      };
+
+      const { data } = await axios.post(
+        "http://localhost:8080/products/add",
+        payload,
+      );
+
+      toast.success(`Product "${data?.data?.title || payload.title}" added successfully`);
+      resetProductForm();
+      setShowAddProductPopover(false);
     } catch (error) {
       console.error(error);
     } finally {
+      setIsSubmittingProduct(false);
       await fetchAllErrors();
     }
   };
@@ -85,6 +140,55 @@ const App = () => {
 
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString();
+  };
+
+  const buildCurlFromError = (error) => {
+    const method =
+      error?.serviceContext?.context?.method ||
+      (error?.url === "/products/add" ? "POST" : "GET");
+    const endpoint = `http://localhost:8080${error?.url || ""}`;
+    const payload =
+      error?.serviceContext?.payload?.body ?? error?.serviceContext?.payload;
+
+    if (
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      Object.keys(payload).length > 0
+    ) {
+      const bodyString = JSON.stringify(payload, null, 2)
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "'\\''");
+      return `curl -X ${method} "${endpoint}" -H "Content-Type: application/json" -d '${bodyString}'`;
+    }
+
+    return `curl -X ${method} "${endpoint}"`;
+  };
+
+  const copyCurlCommand = async (command) => {
+    try {
+      await navigator.clipboard.writeText(command);
+      toast.success("cURL copied");
+    } catch {
+      toast.error("Failed to copy cURL");
+    }
+  };
+
+  const copyRequestBodyJson = async (error) => {
+    const payload =
+      error?.serviceContext?.payload?.body ?? error?.serviceContext?.payload;
+
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      toast.error("No JSON request body available");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      toast.success("Request body JSON copied");
+    } catch {
+      toast.error("Failed to copy request body JSON");
+    }
   };
 
   useEffect(() => {
@@ -174,18 +278,8 @@ const App = () => {
       });
   }, [errors, search, typeFilter, fromDate, toDate, sortBy]);
 
-  const handleExpand = async (errorId) => {
-    if (expandedId === errorId) {
-      setExpandedId(null);
-      return;
-    }
-
-    // Already cached
-    if (fullSnippets[errorId]) {
-      setExpandedId(errorId);
-      return;
-    }
-
+  const loadOlderSnippet = async (errorId) => {
+    if (fullSnippets[errorId]) return;
     try {
       setLoadingSnippet(true);
 
@@ -199,7 +293,6 @@ const App = () => {
           ...prev,
           [errorId]: data.codeSnippet,
         }));
-        setExpandedId(errorId);
       }
     } catch (err) {
       console.error("Failed to load full snippet", err);
@@ -208,27 +301,96 @@ const App = () => {
     }
   };
 
+  const loadLatestSnippet = async (errorId, forceRefresh = false) => {
+    if (!forceRefresh && latestSnippets[errorId]) return;
+
+    try {
+      setLoadingSnippet(true);
+      const latestRes = await fetch(
+        `http://localhost:8080/error/${errorId}/latest-snippet`,
+      );
+      const latestData = await latestRes.json();
+      if (latestData.success) {
+        setLatestSnippets((prev) => ({
+          ...prev,
+          [errorId]: latestData.codeSnippet,
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to load latest snippet", err);
+    } finally {
+      setLoadingSnippet(false);
+    }
+  };
+
+  const handleOlderExpand = async (errorId) => {
+    if (expandedOlderId === errorId) {
+      setExpandedOlderId(null);
+      return;
+    }
+    await loadOlderSnippet(errorId);
+    setExpandedOlderId(errorId);
+  };
+
+  const handleLatestExpand = async (errorId) => {
+    if (expandedLatestId === errorId) {
+      setExpandedLatestId(null);
+      return;
+    }
+    await loadLatestSnippet(errorId);
+    setExpandedLatestId(errorId);
+  };
+
+  const handleCardToggle = async (index, errorId) => {
+    const isCurrentlyOpen = expanded === index;
+    if (isCurrentlyOpen) {
+      setExpanded(null);
+      return;
+    }
+
+    setExpanded(index);
+    await loadOlderSnippet(errorId);
+  };
+
   const handleReplay = async (errorId) => {
     try {
       setReplayingId(errorId);
-      setReplayResult(null);
+      setReplayResultsById((prev) => ({
+        ...prev,
+        [errorId]: null,
+      }));
 
       const { data } = await axios.post(
-        `http://localhost:8080/errors/${errorId}/replay-service`,
+        `http://localhost:8080/products/errors/${errorId}/replay-service`,
       );
 
-      setReplayResult({
-        success: true,
-        data,
-      });
+      setReplayResultsById((prev) => ({
+        ...prev,
+        [errorId]: {
+          success: true,
+          data: {
+            transactionId: data.transactionId,
+            attemptNumber: data.attemptNumber,
+            compared: data.compared,
+            isResolved: data.isResolved,
+            resolutionStatus: data.resolutionStatus,
+          },
+        },
+      }));
+
+      await loadLatestSnippet(errorId, true);
+      setExpandedLatestId(errorId);
 
       // refresh errors after replay
       await fetchAllErrors();
     } catch (err) {
-      setReplayResult({
-        success: false,
-        message: err.response?.data?.message || err.message || "Replay failed",
-      });
+      setReplayResultsById((prev) => ({
+        ...prev,
+        [errorId]: {
+          success: false,
+          message: err.response?.data?.message || err.message || "Replay failed",
+        },
+      }));
     } finally {
       setReplayingId(null);
     }
@@ -273,13 +435,125 @@ const App = () => {
             Trigger Frontend Error
           </button>
           <button
-            onClick={triggerProcutsError}
+            onClick={() => {
+              setShowAddProductPopover(true);
+            }}
             className="px-4 py-2 text-sm bg-black text-white rounded-lg shadow-md hover:bg-gray-800 transition"
           >
-            Trigger Products Error
+            Add Product
           </button>
         </div>
       </div>
+      {showAddProductPopover && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-start justify-center pt-24 px-4">
+          <div className="w-full max-w-lg bg-white rounded-2xl border shadow-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Add Product</h2>
+              <button
+                type="button"
+                onClick={() => setShowAddProductPopover(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={submitProduct} className="space-y-3">
+              <input
+                name="title"
+                value={productForm.title}
+                onChange={handleProductInput}
+                type="text"
+                placeholder="Title"
+                required
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                name="price"
+                value={productForm.price}
+                onChange={handleProductInput}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Price"
+                required
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                name="category"
+                value={productForm.category}
+                onChange={handleProductInput}
+                type="text"
+                placeholder="Category (optional)"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                name="stock"
+                value={productForm.stock}
+                onChange={handleProductInput}
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Stock (optional)"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  name="simulateError"
+                  checked={productForm.simulateError}
+                  onChange={(e) =>
+                    setProductForm((prev) => ({
+                      ...prev,
+                      simulateError: e.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                Simulate service failure (for replay)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  name="triggerKnownBug"
+                  checked={productForm.triggerKnownBug}
+                  onChange={(e) =>
+                    setProductForm((prev) => ({
+                      ...prev,
+                      triggerKnownBug: e.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                Trigger known backend bug (fix backend, then replay)
+              </label>
+              <textarea
+                name="description"
+                value={productForm.description}
+                onChange={handleProductInput}
+                rows={3}
+                placeholder="Description (optional)"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProductPopover(false)}
+                  className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingProduct}
+                  className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {isSubmittingProduct ? "Saving..." : "Save Product"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Stats Bar */}
       <div className="grid grid-cols-4 gap-6 mb-10">
@@ -434,16 +708,48 @@ const App = () => {
           const extension = firstFrame?.file?.split(".").pop();
 
           const snippetToRender =
-            expandedId === error._id && fullSnippets[error._id]
+            expandedOlderId === error._id && fullSnippets[error._id]
               ? fullSnippets[error._id]
               : error.codeSnippet;
+          const latestSnippetSource = latestSnippets[error._id] || [];
+          const latestSnippetToRender =
+            expandedLatestId === error._id && latestSnippets[error._id]
+              ? latestSnippets[error._id]
+              : latestSnippetSource.slice(0, 10);
 
           const hasMoreContext = error.codeSnippet?.length >= 10;
+          const isFrontendError = error.type === "frontend";
+          const isProductServiceError =
+            error.url === "/products/add" &&
+            error.serviceContext?.service === "addProduct";
+          const replayResult = replayResultsById[error._id];
+          const latestReplayTx = item.latestReplayTx || null;
+          const hasReplayAttempt = Boolean(replayResult?.success || latestReplayTx);
+          const resolutionStatus =
+            replayResult?.data?.resolutionStatus ||
+            latestReplayTx?.resolutionStatus ||
+            "not_yet_resolved";
+          const isResolved = resolutionStatus === "resolved";
+          const hasServicePayload = Boolean(error.serviceContext?.payload);
+          const curlCommand = buildCurlFromError(error);
+          const replayHoverText =
+            isProductServiceError && hasReplayAttempt
+              ? isResolved
+                ? "Resolved"
+                : "Not Yet Resolved"
+              : "";
           return (
             <div
               key={error._id}
-              onClick={() => setExpanded(isOpen ? null : index)}
-              className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer"
+              onClick={() => handleCardToggle(index, error._id)}
+              title={replayHoverText}
+              className={`bg-white border rounded-2xl shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer ${
+                isProductServiceError && hasReplayAttempt
+                  ? isResolved
+                    ? "border-green-500"
+                    : "border-red-500"
+                  : "border-gray-200"
+              }`}
             >
               {/* Top Row */}
               <div className="flex justify-between items-start px-6 py-5">
@@ -496,9 +802,38 @@ const App = () => {
                       <p className="break-words">{error.userAgent}</p>
                     </div>
                   </div>
+                  {hasServicePayload && (
+                    <div
+                      className="mb-6 border border-gray-200 rounded-xl bg-white p-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-medium text-gray-600">
+                          Request cURL (copy to Postman or terminal)
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => copyRequestBodyJson(error)}
+                            className="px-3 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
+                          >
+                            Copy JSON Body
+                          </button>
+                          <button
+                            onClick={() => copyCurlCommand(curlCommand)}
+                            className="px-3 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50"
+                          >
+                            Copy cURL
+                          </button>
+                        </div>
+                      </div>
+                      <pre className="text-xs bg-gray-50 border border-gray-200 rounded-md p-3 overflow-x-auto whitespace-pre-wrap">
+                        {curlCommand}
+                      </pre>
+                    </div>
+                  )}
 
                   {/* Code Snippet */}
-                  {error?.codeSnippet && (
+                  {!isFrontendError && snippetToRender?.length > 0 && (
                     <div
                       className="rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
                       onClick={(e) => e.stopPropagation()}
@@ -515,17 +850,20 @@ const App = () => {
                           {firstFrame?.file || "source.js"}
                         </span>
                       </div>
+                      <div className="px-4 py-2 bg-red-900/30 border-b border-gray-800 text-red-300 text-xs font-medium">
+                        Older Snippet (Captured Error)
+                      </div>
                       {/* Expand / Collapse */}
                       {hasMoreContext && (
                         <div className="flex justify-center bg-gray-950 border-b border-gray-800">
                           <button
                             disabled={
-                              loadingSnippet && expandedId !== error._id
+                              loadingSnippet && expandedOlderId !== error._id
                             }
-                            onClick={() => handleExpand(error._id)}
+                            onClick={() => handleOlderExpand(error._id)}
                             className="text-gray-400 hover:text-white text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50"
                           >
-                            {expandedId === error._id
+                            {expandedOlderId === error._id
                               ? "▲ Show Less"
                               : "▼ Show More Context"}
                           </button>
@@ -565,6 +903,65 @@ const App = () => {
                       </SyntaxHighlighter>
                     </div>
                   )}
+                  {!isFrontendError && !snippetToRender?.length && (
+                    <div className="rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-500">
+                      Older snippet is unavailable for this error.
+                    </div>
+                  )}
+                  {!isFrontendError &&
+                    hasReplayAttempt &&
+                    latestSnippetToRender?.length > 0 && (
+                      <div
+                        className="mt-4 rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="px-4 py-2 bg-green-900/40 border-b border-gray-800 text-green-300 text-xs font-medium">
+                          Latest Snippet (Current Code)
+                        </div>
+                        {latestSnippetSource?.length >= 10 && (
+                          <div className="flex justify-center bg-gray-950 border-b border-gray-800">
+                            <button
+                              disabled={
+                                loadingSnippet && expandedLatestId !== error._id
+                              }
+                              onClick={() => handleLatestExpand(error._id)}
+                              className="text-gray-400 hover:text-white text-xs py-1 px-3 flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {expandedLatestId === error._id
+                                ? "▲ Show Less"
+                                : "▼ Show More Context"}
+                            </button>
+                          </div>
+                        )}
+                        <SyntaxHighlighter
+                          language={extension || "javascript"}
+                          style={oneDark}
+                          showLineNumbers
+                          wrapLines={true}
+                          startingLineNumber={latestSnippetToRender[0]?.lineNumber || 1}
+                          customStyle={{
+                            margin: 0,
+                            padding: "16px",
+                            fontSize: "12px",
+                            background: "#000",
+                          }}
+                        >
+                          {latestSnippetToRender.map((line) => line.content).join("\n")}
+                        </SyntaxHighlighter>
+                      </div>
+                    )}
+                  {!isFrontendError &&
+                    hasReplayAttempt &&
+                    !latestSnippetToRender?.length && (
+                    <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-500">
+                      Latest snippet is unavailable right now.
+                    </div>
+                  )}
+                  {!isFrontendError && !hasReplayAttempt && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+                      Run replay to fetch the latest snippet from current backend code.
+                    </div>
+                  )}
 
                   {/* Stack Trace */}
                   <details
@@ -580,7 +977,7 @@ const App = () => {
                     </pre>
                   </details>
 
-                  {error.type === "backend" && (
+                  {error.type === "backend" && isProductServiceError && (
                     <div
                       className="mt-6 flex items-center gap-3"
                       onClick={(e) => e.stopPropagation()}
@@ -592,7 +989,7 @@ const App = () => {
                       >
                         {replayingId === error._id
                           ? "Replaying..."
-                          : "Replay Service"}
+                          : "Replay Product (Dry Run)"}
                       </button>
                     </div>
                   )}
@@ -601,13 +998,42 @@ const App = () => {
                     <div className="mt-4 text-xs">
                       {replayResult.success ? (
                         <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-lg">
-                          Replay succeeded
+                          Replay succeeded | attempt #
+                          {replayResult.data?.attemptNumber || "n/a"} | tx{" "}
+                          {replayResult.data?.transactionId || "n/a"} | compared:{" "}
+                          {replayResult.data?.compared ? "yes" : "no"} | status:{" "}
+                          {replayResult.data?.resolutionStatus === "resolved"
+                            ? "Resolved"
+                            : "Not Yet Resolved"}
                         </div>
                       ) : (
                         <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg">
                           Replay failed: {replayResult.message}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {latestReplayTx && (
+                    <div
+                      className="mt-3 text-xs border border-gray-200 bg-white rounded-lg p-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="font-medium text-gray-700">
+                        Latest Replay Transaction
+                      </p>
+                      <p className="text-gray-600 mt-1">
+                        Status: {latestReplayTx.status}
+                      </p>
+                      <p className="text-gray-600">
+                        Attempt: {latestReplayTx.attemptNumber}
+                      </p>
+                      <p className="text-gray-600">
+                        Resolution:{" "}
+                        {latestReplayTx.resolutionStatus === "resolved" ||
+                        latestReplayTx.isResolved
+                          ? "Resolved"
+                          : "Not Yet Resolved"}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -623,6 +1049,7 @@ const App = () => {
           </div>
         )}
       </div>
+      <Toaster position="top-right" />
     </div>
   );
 };

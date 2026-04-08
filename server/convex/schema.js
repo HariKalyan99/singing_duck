@@ -17,6 +17,7 @@ export default defineSchema({
         service: v.string(),
         payload: v.any(),
         context: v.optional(v.any()),
+        replayable: v.optional(v.boolean()),
       }),
     ),
     parsedStack: v.optional(
@@ -39,7 +40,51 @@ export default defineSchema({
         }),
       ),
     ),
+    originalCodeSnippet: v.optional(
+      v.array(
+        v.object({
+          lineNumber: v.number(),
+          content: v.string(),
+          isErrorLine: v.boolean(),
+        }),
+      ),
+    ),
+    replayCount: v.optional(v.number()),
+    replayLastStatus: v.optional(v.string()),
+    replayFixedDetected: v.optional(v.boolean()),
+    replayLastComparedAt: v.optional(v.string()),
+    resolutionStatus: v.optional(v.string()),
   })
     .index("by_fingerprint", ["fingerPrint"])
-    .index("by_timestamp", ["timestamp"]), // ✅ ADD THIS
+    .index("by_timestamp", ["timestamp"]),
+
+  replayTransactions: defineTable({
+    errorId: v.id("errors"),
+    transactionId: v.string(),
+    attemptNumber: v.number(),
+    originalMessage: v.string(),
+    originalFingerPrint: v.string(),
+    status: v.string(),
+    replayMessage: v.optional(v.string()),
+    replayFingerPrint: v.optional(v.string()),
+    isResolved: v.optional(v.boolean()),
+    resolutionStatus: v.optional(v.string()),
+    compared: v.boolean(),
+    startedAt: v.string(),
+    completedAt: v.optional(v.string()),
+  })
+    .index("by_error_id", ["errorId"])
+    .index("by_transaction_id", ["transactionId"]),
+
+  products: defineTable({
+    title: v.string(),
+    price: v.number(),
+    category: v.string(),
+    stock: v.number(),
+    description: v.string(),
+    createdAt: v.string(),
+  })
+    .index("by_title", ["title"])
+    .index("by_category", ["category"])
+    .index("by_created_at", ["createdAt"]),
 });

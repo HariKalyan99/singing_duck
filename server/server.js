@@ -9,10 +9,11 @@ import captureDuck from "./main/captureDuck.js";
 
 import { api } from "./convex/_generated/api.js";
 import { getConvex } from "./src/lib/convex.js";
-import axios from "axios";
 import trimSnippet from "./helper/trimSnippet.js";
-import { fetchFirstProduct } from "./services/productService.js";
 import { replayService } from "./services/replayService.js";
+import { addProductController } from "./controllers/productController.js";
+import { runTx } from "./services/transactionService.js";
+import { getGroupedErrors, getLatestSnippet } from "./services/errorService.js";
 
 const convex = getConvex();
 
@@ -109,23 +110,8 @@ app.delete("/errors", async (req, res) => {
  */
 app.get("/all-errors", async (req, res) => {
   try {
-    const errors = await convex.query(api.errors.getRecentErrors);
-    const grouped = {};
-
-    errors.forEach((err) => {
-      if (!grouped[err.fingerPrint]) {
-        grouped[err.fingerPrint] = {
-          count: 0,
-          error: {
-            ...err,
-            codeSnippet: trimSnippet(err.codeSnippet, 5),
-          },
-        };
-      }
-      grouped[err.fingerPrint].count++;
-    });
-
-    res.json(Object.values(grouped));
+    const grouped = await getGroupedErrors(null, { convex });
+    res.json(grouped);
   } catch (err) {
     console.error("Failed to group errors:", err);
     res.status(500).json({ success: false });
@@ -151,6 +137,26 @@ app.get("/error/:id/full-snippet", async (req, res) => {
     });
   } catch (err) {
     console.error("Failed to fetch full snippet:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+app.get("/error/:id/latest-snippet", async (req, res) => {
+  try {
+    const codeSnippet = await getLatestSnippet({ id: req.params.id }, { convex });
+    res.json({
+      success: true,
+      codeSnippet,
+    });
+  } catch (err) {
+    if (err.message === "Error not found") {
+      return res.status(404).json({
+        success: false,
+        message: "Error not found",
+      });
+    }
+
+    console.error("Failed to fetch latest snippet:", err);
     res.status(500).json({ success: false });
   }
 });
@@ -197,23 +203,7 @@ app.get("/test-promise-error", async (req, res) => {
 //   }
 // });
 
-app.get("/products", async (req, res, next) => {
-  try {
-    const result = await fetchFirstProduct(null, {});
-    return res.status(200).json(result);
-  } catch (error) {
-    await captureDuck(error, {
-      url: "/products",
-      serviceContext: {
-        service: "fetchFirstProduct",
-        payload: null,
-        context: {},
-      },
-    });
-
-    return res.status(500).json({ error: "internal server error" });
-  }
-});
+app.post("/products/add", addProductController);
 
 app.post("/errors/:id/replay-service", async (req, res) => {
   if (process.env.NODE_ENV === "production") {
@@ -232,6 +222,110 @@ app.post("/errors/:id/replay-service", async (req, res) => {
     res.json({
       success: true,
       result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+app.post("/products/errors/:id/replay-service", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({
+      message: "Replay disabled in production",
+    });
+  }
+
+  try {
+    const error = await convex.query(api.errors.getErrorById, {
+      id: req.params.id,
+    });
+
+    if (!error) {
+      return res.status(404).json({
+        success: false,
+        message: "Error not found",
+      });
+    }
+
+    if (error.serviceContext?.service !== "addProduct") {
+      return res.status(400).json({
+        success: false,
+        message: "Replay is only supported for product add service",
+      });
+    }
+
+    const transactionId = crypto.randomUUID();
+    const startedAt = new Date().toISOString();
+
+    const txEnvelope = await runTx({ transactionId, dryRun: true }, async (tx) => {
+      const beginResult = await tx.write("begin_replay_transaction", () =>
+        convex.mutation(api.errors.beginReplayTransaction, {
+          errorId: error._id,
+          transactionId,
+          originalMessage: error.message,
+          originalFingerPrint: error.fingerPrint,
+          startedAt,
+        }),
+      );
+
+      const result = await replayService(error, {
+        dryRun: true,
+        transactionId,
+        transactionMode: "dry-run",
+      });
+
+      const replayMessage =
+        typeof result === "string"
+          ? result
+          : result?.message || JSON.stringify(result || {});
+      const replayFingerPrint = getFingerPrint({
+        message: replayMessage,
+        url: error.url,
+        type: error.type,
+        parsedStack: error.parsedStack || [],
+      });
+      const isSimulatedReplay = Boolean(result?.simulated);
+      const isResolved =
+        !isSimulatedReplay &&
+        replayFingerPrint !== error.fingerPrint &&
+        replayMessage !== error.message;
+
+      await tx.write("complete_replay_transaction_success", () =>
+        convex.mutation(api.errors.completeReplayTransaction, {
+          errorId: error._id,
+          transactionId,
+          status: "success",
+          replayMessage,
+          replayFingerPrint,
+          isResolved,
+          resolutionStatus: isResolved ? "resolved" : "not_yet_resolved",
+          compared: true,
+          completedAt: new Date().toISOString(),
+        }),
+      );
+
+      return {
+        beginResult,
+        result,
+        isResolved,
+        resolutionStatus: isResolved ? "resolved" : "not_yet_resolved",
+      };
+    });
+
+    const { beginResult, result, isResolved, resolutionStatus } = txEnvelope.result;
+
+    res.json({
+      success: true,
+      transactionId,
+      attemptNumber: beginResult.attemptNumber,
+      compared: true,
+      isResolved,
+      resolutionStatus,
+      result,
+      txOperations: txEnvelope.operations,
     });
   } catch (err) {
     res.status(500).json({

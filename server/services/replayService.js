@@ -5,11 +5,7 @@ export async function replayService(errorRecord, context) {
     throw new Error("No service replay data found");
   }
 
-  const {
-    service,
-    payload,
-    context: storedContext,
-  } = errorRecord.serviceContext;
+  const { service, payload, context: storedContext } = errorRecord.serviceContext;
 
   const fn = serviceRegistry[service];
 

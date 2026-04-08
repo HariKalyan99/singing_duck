@@ -1,5 +1,6 @@
 import trimSnippet from "../helper/trimSnippet.js";
 import { api } from "../convex/_generated/api.js";
+import getCodeSnippet from "../helper/getCodeSnippet.js";
 
 export async function getRecentErrors(_, { convex }) {
   const errors = await convex.query(api.errors.getRecentErrors);
@@ -8,6 +9,38 @@ export async function getRecentErrors(_, { convex }) {
     ...err,
     codeSnippet: trimSnippet(err.codeSnippet, 5),
   }));
+}
+
+export async function getGroupedErrors(_, { convex }) {
+  const errors = await convex.query(api.errors.getRecentErrors);
+  const grouped = {};
+
+  errors.forEach((err) => {
+    if (!grouped[err.fingerPrint]) {
+      grouped[err.fingerPrint] = {
+        count: 0,
+        error: {
+          ...err,
+          codeSnippet: trimSnippet(err.codeSnippet, 5),
+        },
+      };
+    }
+    grouped[err.fingerPrint].count++;
+  });
+
+  return await Promise.all(
+    Object.values(grouped).map(async (group) => {
+      const latestReplayTx = await convex.query(
+        api.errors.getLatestReplayTransactionByErrorId,
+        { errorId: group.error._id },
+      );
+
+      return {
+        ...group,
+        latestReplayTx,
+      };
+    }),
+  );
 }
 
 export async function clearErrors(_, { convex }) {
@@ -22,5 +55,20 @@ export async function getFullSnippet({ id }, { convex }) {
     throw new Error("Error not found");
   }
 
-  return error.codeSnippet || [];
+  return error.originalCodeSnippet || error.codeSnippet || [];
+}
+
+export async function getLatestSnippet({ id }, { convex }) {
+  const error = await convex.query(api.errors.getErrorById, { id });
+
+  if (!error) {
+    throw new Error("Error not found");
+  }
+
+  const topFrame = error.parsedStack?.[0];
+  if (!topFrame?.file || !topFrame?.line) {
+    return [];
+  }
+
+  return getCodeSnippet(topFrame.file, topFrame.line) || [];
 }
