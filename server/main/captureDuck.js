@@ -30,6 +30,7 @@ async function captureDuck(error, extra = {}) {
       type: "backend",
       environment: process.env.NODE_ENV || "development",
       codeSnippet,
+      originalCodeSnippet: codeSnippet,
       timestamp: new Date().toISOString(),
       serviceContext: extra.serviceContext || undefined,
     };
@@ -52,6 +53,7 @@ async function captureDuck(error, extra = {}) {
       parsedStack: errorObj.stack,
 
       codeSnippet: codeSnippet || null,
+      originalCodeSnippet: codeSnippet || null,
       serviceContext: errorObj.serviceContext,
     });
     console.log("Error stored in Convex:", errorObj.message);
