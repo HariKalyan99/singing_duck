@@ -152,7 +152,7 @@ export default function AppLayout() {
       </div>
 
       <Toaster
-        position="top-right"
+        position="bottom-left"
         toastOptions={{
           className:
             "!bg-white !text-zinc-900 !border !border-zinc-200 !shadow-lg dark:!bg-zinc-900 dark:!text-zinc-100 dark:!border-zinc-700",

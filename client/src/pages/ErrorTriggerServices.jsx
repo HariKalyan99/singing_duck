@@ -80,6 +80,8 @@ export default function ErrorTriggerServices() {
   const submitProduct = async (event) => {
     event.preventDefault();
     setIsSubmittingProduct(true);
+    let createdProductTitle = "";
+    let isSuccess = false;
 
     try {
       const payload = {
@@ -97,17 +99,24 @@ export default function ErrorTriggerServices() {
         payload,
       );
 
-      toast.success(
-        `Product "${data?.data?.title || payload.title}" added successfully`,
-      );
+      createdProductTitle = data?.data?.title || payload.title;
+      isSuccess = true;
       resetProductForm();
       setShowAddProductPopover(false);
-      navigate("/");
     } catch (error) {
       console.error(error);
+      toast.error(
+        error?.response?.data?.error ||
+          error?.message ||
+          "Failed to create product trigger",
+      );
     } finally {
-      setIsSubmittingProduct(false);
       await fetchAllErrors();
+      if (isSuccess) {
+        toast.success(`Product "${createdProductTitle}" created. Opening dashboard...`);
+        navigate("/");
+      }
+      setIsSubmittingProduct(false);
     }
   };
 
