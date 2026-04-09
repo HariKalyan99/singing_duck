@@ -335,6 +335,138 @@ app.post("/products/errors/:id/replay-service", async (req, res) => {
   }
 });
 
+app.get("/posthog/recordings", async (req, res) => {
+  const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+  const projectId = process.env.POSTHOG_PROJECT_ID;
+  const region = process.env.POSTHOG_REGION === "eu" ? "eu" : "us";
+  const configuredHost = process.env.POSTHOG_APP_HOST || null;
+  const fallbackHosts =
+    region === "eu"
+      ? ["https://eu.posthog.com", "https://app.posthog.com"]
+      : ["https://app.posthog.com", "https://us.posthog.com"];
+  const hosts = [configuredHost, ...fallbackHosts].filter(Boolean);
+
+  if (!apiKey || !projectId) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Missing PostHog server config (POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID).",
+    });
+  }
+
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    let payload = null;
+    let resolvedHost = hosts[0];
+    let lastError = null;
+
+    for (const host of hosts) {
+      const url = `${host.replace(/\/$/, "")}/api/projects/${projectId}/session_recordings?limit=${limit}`;
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            const detail = data?.detail || data?.message || "";
+            const looksLikeProjectKey = String(apiKey).startsWith("phc_");
+            const authHint = looksLikeProjectKey
+              ? "Use POSTHOG_PERSONAL_API_KEY (phx_...), not project key (phc_...)."
+              : "Check that this personal key has access to the target project/org and that POSTHOG_PROJECT_ID is correct.";
+            return res.status(response.status).json({
+              success: false,
+              message: detail
+                ? `PostHog auth failed: ${detail}. ${authHint}`
+                : `PostHog auth failed. ${authHint}`,
+            });
+          }
+          lastError =
+            data?.detail ||
+            data?.message ||
+            `PostHog request failed (${response.status})`;
+          continue;
+        }
+
+        payload = data;
+        resolvedHost = host;
+        break;
+      } catch (err) {
+        lastError = err?.message || "fetch failed";
+      }
+    }
+
+    if (!payload) {
+      return res.status(502).json({
+        success: false,
+        message:
+          lastError ||
+          "Unable to reach PostHog API. Check POSTHOG_REGION/POSTHOG_APP_HOST and network.",
+      });
+    }
+
+    const results = Array.isArray(payload?.results)
+      ? payload.results
+      : Array.isArray(payload)
+        ? payload
+        : [];
+
+    const recordings = results
+      .map((rec) => {
+        const sessionId = rec?.session_id || rec?.id || null;
+        const startTime = rec?.start_time || rec?.created_at || null;
+        const endTime = rec?.end_time || null;
+        const explicitDuration =
+          rec?.recording_duration_s ?? rec?.duration_s ?? null;
+        const hasEndTime = Boolean(endTime);
+        const isOngoing = hasEndTime ? false : Boolean(rec?.ongoing);
+        const derivedDuration =
+          !explicitDuration && startTime && endTime
+            ? Math.max(
+                0,
+                Math.round(
+                  (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000,
+                ),
+              )
+            : null;
+        return {
+          id: rec?.id || sessionId,
+          sessionId,
+          distinctId: rec?.distinct_id || null,
+          startTime,
+          endTime,
+          durationSeconds: explicitDuration ?? derivedDuration,
+          ongoing: isOngoing,
+          viewed: Boolean(rec?.viewed),
+          replayUrl:
+            rec?.viewer_url ||
+            (sessionId
+              ? `${resolvedHost.replace(/\/$/, "")}/project/${projectId}/replay/${sessionId}`
+              : null),
+        };
+      })
+      .sort((a, b) => {
+        const at = new Date(a.startTime || 0).getTime();
+        const bt = new Date(b.startTime || 0).getTime();
+        return bt - at;
+      });
+
+    res.json({
+      success: true,
+      recordings,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message || "Failed to fetch recordings",
+    });
+  }
+});
+
 /**
  * GLOBAL ERROR MIDDLEWARE
  */

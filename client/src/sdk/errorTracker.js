@@ -1,7 +1,22 @@
 import axios from "axios";
+import posthog from "posthog-js";
 import { parseStackTrace } from "../shared/parseStackTrace";
 
+function forwardToPosthog(error, extra) {
+  try {
+    if (!posthog.__loaded || !(error instanceof Error)) return;
+    posthog.captureException(error, {
+      source: "singing_duck_frontend",
+      ...extra,
+    });
+  } catch {
+    /* optional analytics */
+  }
+}
+
 export async function captureDuck(error, extra = {}) {
+  forwardToPosthog(error, extra);
+
   try {
     const rawStack = error.stack || null;
 

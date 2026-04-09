@@ -4,10 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>client</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Singing Duck</title>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Must run after <body> exists (body is null while script is in <head>) -->
+    <script>
+      (function () {
+        try {
+          var key = "singing-duck-theme";
+          var stored = localStorage.getItem(key);
+          /* Default dark; only explicit "light" opts out */
+          var dark = stored !== "light";
+          var html = document.documentElement;
+          var body = document.body;
+          var mode = dark ? "dark" : "light";
+          html.setAttribute("data-theme", mode);
+          body.setAttribute("data-theme", mode);
+          html.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

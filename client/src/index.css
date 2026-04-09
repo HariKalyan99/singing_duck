@@ -7,3 +7,17 @@
   padding: 0;
   margin: 0;
 }
+
+@layer base {
+  html {
+    @apply antialiased h-full;
+  }
+
+  body {
+    @apply font-sans text-zinc-900 bg-zinc-50 dark:text-zinc-100 dark:bg-zinc-950 h-full min-h-0;
+  }
+
+  #root {
+    @apply h-full min-h-0;
+  }
+}
