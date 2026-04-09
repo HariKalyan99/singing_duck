@@ -84,7 +84,7 @@ export default function AppLayout() {
           <h1 className="mt-2 text-base font-semibold text-zinc-900 dark:text-zinc-50 leading-snug">
             Error Monitoring System
           </h1>
-          <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+          <p className="mt-1.5 text-xs text-zinc-800 dark:text-zinc-300 leading-relaxed">
             Capture, replay, and triage in one place.
           </p>
         </div>
