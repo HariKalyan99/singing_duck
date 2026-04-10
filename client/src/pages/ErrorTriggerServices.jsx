@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { captureDuck } from "../sdk/errorTracker.js";
 import { useErrors } from "../context/errorsContext.js";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
+
 export default function ErrorTriggerServices() {
   const { fetchAllErrors } = useErrors();
   const navigate = useNavigate();
@@ -42,7 +44,7 @@ export default function ErrorTriggerServices() {
 
   const triggerBackendError = async () => {
     try {
-      await axios.get("http://localhost:8080/test-error");
+      await axios.get(`${API_BASE}/test-error`);
     } catch (error) {
       console.error(error);
     } finally {
@@ -52,7 +54,7 @@ export default function ErrorTriggerServices() {
 
   const triggerBackendPromiseError = async () => {
     try {
-      await axios.get("http://localhost:8080/test-promise-error");
+      await axios.get(`${API_BASE}/test-promise-error`);
     } catch (error) {
       console.error(error);
     } finally {
@@ -82,6 +84,8 @@ export default function ErrorTriggerServices() {
     setIsSubmittingProduct(true);
     let createdProductTitle = "";
     let isSuccess = false;
+    const hadKnownBug = productForm.triggerKnownBug;
+    const hadSimulateError = productForm.simulateError;
 
     try {
       const payload = {
@@ -94,26 +98,43 @@ export default function ErrorTriggerServices() {
         triggerKnownBug: productForm.triggerKnownBug,
       };
 
-      const { data } = await axios.post(
-        "http://localhost:8080/products/add",
-        payload,
-      );
+      const { data } = await axios.post(`${API_BASE}/products/add`, payload);
 
-      createdProductTitle = data?.data?.title || payload.title;
+      const body = data?.data;
+      const isBugPathResponse =
+        hadKnownBug &&
+        body &&
+        body.adjustedPrice != null &&
+        !body.title;
+
+      createdProductTitle = body?.title || payload.title;
       isSuccess = true;
       resetProductForm();
       setShowAddProductPopover(false);
+
+      if (isBugPathResponse) {
+        toast.success(
+          `Known-bug path ok (adjustedPrice ${body.adjustedPrice}, no Convex row). Opening dashboard…`,
+        );
+      } else {
+        toast.success(
+          `Product "${createdProductTitle}" created. Opening dashboard...`,
+        );
+      }
     } catch (error) {
       console.error(error);
-      toast.error(
+      const msg =
         error?.response?.data?.error ||
-          error?.message ||
-          "Failed to create product trigger",
+        error?.message ||
+        "Failed to create product trigger";
+      toast.error(
+        hadKnownBug && !hadSimulateError
+          ? `${msg} (expected if buggyPriceCalculator is commented out in server/services/productService.js)`
+          : msg,
       );
     } finally {
       await fetchAllErrors();
       if (isSuccess) {
-        toast.success(`Product "${createdProductTitle}" created. Opening dashboard...`);
         navigate("/");
       }
       setIsSubmittingProduct(false);
@@ -143,7 +164,8 @@ export default function ErrorTriggerServices() {
     },
     {
       title: "Product workflow",
-      description: "Open the modal to POST /products/add with replay flags.",
+      description:
+        "POST /products/add. Known-bug checkbox matches server: error while buggyPriceCalculator is commented out; uncomment it to get 201 + adjustedPrice only.",
       onClick: () => setShowAddProductPopover(true),
     },
   ];
@@ -268,7 +290,8 @@ export default function ErrorTriggerServices() {
                   }
                   type="checkbox"
                 />
-                Trigger known backend bug (fix backend, then replay)
+                Trigger known backend bug (error until buggyPriceCalculator is
+                uncommented in productService.js)
               </label>
               <textarea
                 name="description"
