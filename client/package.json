@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@singing-duck/capture-duck": "file:../packages/capture-duck",
     "axios": "^1.13.6",
     "posthog-js": "^1.365.5",
     "react": "^19.2.4",

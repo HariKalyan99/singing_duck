@@ -1,0 +1,47 @@
+{
+  "name": "@singing-duck/capture-duck",
+  "version": "0.1.0",
+  "description": "Browser and Node error capture: stack parsing, optional PostHog, pluggable ingest.",
+  "type": "module",
+  "license": "MIT",
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/singing_duck.git",
+    "directory": "packages/capture-duck"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/parseStackTrace.js",
+      "default": "./src/parseStackTrace.js"
+    },
+    "./browser": {
+      "import": "./src/browser/index.js",
+      "default": "./src/browser/index.js"
+    },
+    "./node": {
+      "import": "./src/node/index.js",
+      "default": "./src/node/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "PUBLISHING.md"
+  ],
+  "peerDependencies": {
+    "posthog-js": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "posthog-js": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "prepack": "npm test"
+  }
+}

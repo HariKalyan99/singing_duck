@@ -4,6 +4,13 @@ import { getConvex } from "../src/lib/convex.js";
 
 const convex = getConvex();
 
+// Known-bug / replay demo: while this function stays commented out, POST /products/add
+// with triggerKnownBug=true calls buggyPriceCalculator below → ReferenceError → captured error.
+// Uncomment and return a number (e.g. `return price;`) to "fix" the path → 201 + { adjustedPrice }.
+// function buggyPriceCalculator(price) {
+//   return price;
+// }
+
 export async function addProduct(payload, context = {}) {
   const {
     dryRun = false,
@@ -33,9 +40,8 @@ export async function addProduct(payload, context = {}) {
     throw error;
   }
 
-  // Intentionally buggy path for replay workflow:
-  // submit with triggerKnownBug=true, fix backend code, then replay.
-  if (payload?.triggerKnownBug) {
+  // Replay uses dryRun: skip this branch so replay does not hit ReferenceError.
+  if (payload?.triggerKnownBug && !dryRun) {
     const adjustedPrice = buggyPriceCalculator(validatedProduct.price);
     return {
       adjustedPrice,
@@ -43,6 +49,22 @@ export async function addProduct(payload, context = {}) {
   }
 
   if (dryRun) {
+    if (payload?.triggerKnownBug) {
+      return {
+        simulated: true,
+        message:
+          "Known-bug path skipped during dry-run replay; resolution cannot be confirmed yet.",
+        transaction: {
+          id: transactionId,
+          mode: transactionMode,
+        },
+        preview: {
+          ...validatedProduct,
+          createdAt: new Date().toISOString(),
+        },
+      };
+    }
+
     return {
       simulated: false,
       message: "Dry run addProduct succeeded",

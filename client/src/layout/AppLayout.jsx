@@ -67,19 +67,28 @@ export default function AppLayout() {
       <div className="fixed top-3 right-3 z-40">
         <ThemeToggle />
       </div>
-      <aside className="hidden md:flex h-full min-h-0 w-60 shrink-0 flex-col overflow-hidden border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="shrink-0 p-5 border-b border-zinc-200 dark:border-zinc-800">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+      <aside className="relative hidden md:flex h-full min-h-0 w-60 shrink-0 flex-col overflow-hidden border-r border-zinc-200 dark:border-zinc-800">
+        <div
+          className="absolute inset-0 bg-cover bg-left bg-no-repeat opacity-20"
+          style={{ backgroundImage: "url('/parasaur.png')" }}
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 bg-white/88 dark:bg-zinc-900/88 backdrop-blur-[1px]"
+          aria-hidden
+        />
+        <div className="relative shrink-0 p-5 border-b border-zinc-200/80 dark:border-zinc-800/80">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-900 dark:text-zinc-400 underline">
             Singing Duck
           </p>
           <h1 className="mt-2 text-base font-semibold text-zinc-900 dark:text-zinc-50 leading-snug">
             Error Monitoring System
           </h1>
-          <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+          <p className="mt-1.5 text-xs text-zinc-800 dark:text-zinc-300 leading-relaxed">
             Capture, replay, and triage in one place.
           </p>
         </div>
-        <nav className="min-h-0 flex-1 overflow-y-auto p-3 space-y-0.5">
+        <nav className="relative min-h-0 flex-1 overflow-y-auto p-3 space-y-0.5">
           <NavLink to="/" end className={navClass}>
             <span className="h-1 w-1 rounded-full bg-current opacity-60" />
             Dashboard
@@ -93,17 +102,23 @@ export default function AppLayout() {
             Error triggers
           </NavLink>
         </nav>
-        <div className="shrink-0 p-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+        <div className="relative shrink-0 p-3 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
           <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-500">
             {import.meta.env.VITE_PUBLIC_POSTHOG_KEY
               ? "PostHog: session replay & pageviews (see project → Recordings)."
               : "Add VITE_PUBLIC_POSTHOG_KEY for PostHog replay & analytics."}
           </p>
         </div>
+
       </aside>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
         <header className="z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-zinc-200 bg-white/95 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 md:hidden">
+          <img
+            src="/parasaur.png"
+            alt="Singing Duck logo"
+            className="h-6 w-6 rounded-md object-cover"
+          />
           <NavLink
             to="/"
             end
@@ -152,7 +167,7 @@ export default function AppLayout() {
       </div>
 
       <Toaster
-        position="top-right"
+        position="bottom-left"
         toastOptions={{
           className:
             "!bg-white !text-zinc-900 !border !border-zinc-200 !shadow-lg dark:!bg-zinc-900 dark:!text-zinc-100 dark:!border-zinc-700",
