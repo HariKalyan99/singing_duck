@@ -1,0 +1,13 @@
+{
+  "name": "trial-consumer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Local verification for @singing-duck/capture-duck before npm publish",
+  "scripts": {
+    "trial:node": "node ./node-trial.mjs"
+  },
+  "dependencies": {
+    "@singing-duck/capture-duck": "file:../../packages/capture-duck"
+  }
+}
