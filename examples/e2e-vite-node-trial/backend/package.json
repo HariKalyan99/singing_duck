@@ -1,0 +1,15 @@
+{
+  "name": "capture-duck-trial-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@singing-duck/capture-duck": "file:../../../packages/capture-duck",
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}

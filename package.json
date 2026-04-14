@@ -4,6 +4,8 @@
   "description": "Singing Duck app + @singing-duck/capture-duck package (see packages/capture-duck)",
   "scripts": {
     "test:capture-duck": "npm test -w @singing-duck/capture-duck 2>/dev/null || npm test --prefix packages/capture-duck",
-    "trial:consumer": "npm install --prefix examples/trial-consumer && node examples/trial-consumer/node-trial.mjs"
+    "trial:consumer": "npm install --prefix examples/trial-consumer && node examples/trial-consumer/node-trial.mjs",
+    "trial:e2e:backend": "npm install --prefix examples/e2e-vite-node-trial/backend && npm run dev --prefix examples/e2e-vite-node-trial/backend",
+    "trial:e2e:frontend": "npm install --prefix examples/e2e-vite-node-trial/frontend && npm run dev --prefix examples/e2e-vite-node-trial/frontend"
   }
 }
