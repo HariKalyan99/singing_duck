@@ -210,6 +210,8 @@ export default function ErrorDashboard() {
           ...prev,
           [errorId]: latestData.codeSnippet,
         }));
+      } else if (latestData?.message) {
+        toast.error(latestData.message);
       }
     } catch (err) {
       console.error("Failed to load latest snippet", err);
@@ -284,9 +286,16 @@ export default function ErrorDashboard() {
           },
         },
       }));
-
-      await loadLatestSnippet(error._id, true);
-      setExpandedLatestId(error._id);
+      const resolvedStatus =
+        data.resolutionStatus ||
+        resultData.resolutionStatus ||
+        "not_yet_resolved";
+      if (resolvedStatus === "resolved") {
+        await loadLatestSnippet(error._id, true);
+        setExpandedLatestId(error._id);
+      } else {
+        setExpandedLatestId(null);
+      }
 
       // refresh errors after replay
       await fetchAllErrors();
@@ -730,6 +739,7 @@ export default function ErrorDashboard() {
                   )}
                   {!isFrontendError &&
                     hasReplayAttempt &&
+                    isResolved &&
                     latestSnippetToRender?.length > 0 && (
                       <div
                         className="mt-4 rounded-xl overflow-hidden border border-gray-800 shadow-inner bg-black"
@@ -772,9 +782,15 @@ export default function ErrorDashboard() {
                     )}
                   {!isFrontendError &&
                     hasReplayAttempt &&
+                    isResolved &&
                     !latestSnippetToRender?.length && (
                     <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 text-xs text-zinc-500 dark:text-zinc-400">
                       Latest snippet is unavailable right now.
+                    </div>
+                  )}
+                  {!isFrontendError && hasReplayAttempt && !isResolved && (
+                    <div className="mt-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-900 dark:text-amber-200">
+                      Latest snippet unlocks only after replay status is Resolved.
                     </div>
                   )}
                   {!isFrontendError && !hasReplayAttempt && (
@@ -817,7 +833,13 @@ export default function ErrorDashboard() {
                   {replayResult && replayingId !== error._id && (
                     <div className="mt-4 text-xs">
                       {replayResult.success ? (
-                        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-200 p-3 rounded-lg">
+                        <div
+                          className={`p-3 rounded-lg border ${
+                            replayResult.data?.resolutionStatus === "resolved"
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-200"
+                              : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-200"
+                          }`}
+                        >
                           Replay succeeded | attempt #
                           {replayResult.data?.attemptNumber || "n/a"} | tx{" "}
                           {replayResult.data?.transactionId || "n/a"} | compared:{" "}

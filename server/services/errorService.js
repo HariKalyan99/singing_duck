@@ -65,6 +65,19 @@ export async function getLatestSnippet({ id }, { convex }) {
     throw new Error("Error not found");
   }
 
+  const latestReplayTx = await convex.query(
+    api.errors.getLatestReplayTransactionByErrorId,
+    { errorId: error._id },
+  );
+  const isResolved =
+    error.resolutionStatus === "resolved" ||
+    latestReplayTx?.resolutionStatus === "resolved" ||
+    latestReplayTx?.isResolved === true;
+
+  if (!isResolved) {
+    throw new Error("Latest snippet is only available after a resolved replay");
+  }
+
   const topFrame = error.parsedStack?.[0];
   if (!topFrame?.file || !topFrame?.line) {
     return [];

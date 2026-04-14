@@ -155,6 +155,12 @@ app.get("/error/:id/latest-snippet", async (req, res) => {
         message: "Error not found",
       });
     }
+    if (err.message === "Latest snippet is only available after a resolved replay") {
+      return res.status(409).json({
+        success: false,
+        message: err.message,
+      });
+    }
 
     console.error("Failed to fetch latest snippet:", err);
     res.status(500).json({ success: false });
@@ -216,12 +222,78 @@ app.post("/errors/:id/replay-service", async (req, res) => {
     const error = await convex.query(api.errors.getErrorById, {
       id: req.params.id,
     });
+    if (!error) {
+      return res.status(404).json({
+        success: false,
+        message: "Error not found",
+      });
+    }
 
-    const result = await replayService(error, { dryRun: true });
+    const transactionId = crypto.randomUUID();
+    const startedAt = new Date().toISOString();
+
+    const txEnvelope = await runTx({ transactionId, dryRun: true }, async (tx) => {
+      const beginResult = await tx.write("begin_replay_transaction", () =>
+        convex.mutation(api.errors.beginReplayTransaction, {
+          errorId: error._id,
+          transactionId,
+          originalMessage: error.message,
+          originalFingerPrint: error.fingerPrint,
+          startedAt,
+        }),
+      );
+
+      const result = await replayService(error, { dryRun: true });
+
+      const replayMessage =
+        typeof result === "string"
+          ? result
+          : result?.message || JSON.stringify(result || {});
+      const replayFingerPrint = getFingerPrint({
+        message: replayMessage,
+        url: error.url,
+        type: error.type,
+        parsedStack: error.parsedStack || [],
+      });
+      const isSimulatedReplay = Boolean(result?.simulated);
+      const isResolved =
+        !isSimulatedReplay &&
+        replayFingerPrint !== error.fingerPrint &&
+        replayMessage !== error.message;
+
+      await tx.write("complete_replay_transaction_success", () =>
+        convex.mutation(api.errors.completeReplayTransaction, {
+          errorId: error._id,
+          transactionId,
+          status: "success",
+          replayMessage,
+          replayFingerPrint,
+          isResolved,
+          resolutionStatus: isResolved ? "resolved" : "not_yet_resolved",
+          compared: true,
+          completedAt: new Date().toISOString(),
+        }),
+      );
+
+      return {
+        beginResult,
+        result,
+        isResolved,
+        resolutionStatus: isResolved ? "resolved" : "not_yet_resolved",
+      };
+    });
+
+    const { beginResult, result, isResolved, resolutionStatus } = txEnvelope.result;
 
     res.json({
       success: true,
+      transactionId,
+      attemptNumber: beginResult.attemptNumber,
+      compared: true,
+      isResolved,
+      resolutionStatus,
       result,
+      txOperations: txEnvelope.operations,
     });
   } catch (err) {
     res.status(500).json({

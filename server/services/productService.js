@@ -41,7 +41,7 @@ export async function addProduct(payload, context = {}) {
   }
 
   // Replay uses dryRun: skip this branch so replay does not hit ReferenceError.
-  if (payload?.triggerKnownBug && !dryRun) {
+  if (payload?.triggerKnownBug && dryRun) {
     const adjustedPrice = buggyPriceCalculator(validatedProduct.price);
     return {
       adjustedPrice,
