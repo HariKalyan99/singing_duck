@@ -1,5 +1,6 @@
 import captureDuck from "../main/captureDuck.js";
 import { addProduct } from "../services/productService.js";
+import { buildClientErrorResponse } from "@singing-duck/capture-duck/node";
 
 export async function addProductController(req, res) {
   const transactionId = req.headers["x-transaction-id"] || null;
@@ -36,10 +37,13 @@ export async function addProductController(req, res) {
       });
     }
 
-    return res.status(500).json({
-      success: false,
-      error: "internal server error",
-      stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
-    });
+    return res.status(500).json(
+      buildClientErrorResponse(error, {
+        code: "PRODUCT_CREATE_FAILED",
+        defaultMessage: "internal server error",
+        requestId: transactionId || undefined,
+        includeStack: false,
+      }),
+    );
   }
 }

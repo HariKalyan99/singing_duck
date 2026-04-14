@@ -6,6 +6,7 @@ import crypto from "crypto";
 
 import getFingerPrint from "./helper/getFingerPrint.js";
 import captureDuck from "./main/captureDuck.js";
+import { buildClientErrorResponse } from "@singing-duck/capture-duck/node";
 
 import { api } from "./convex/_generated/api.js";
 import { getConvex } from "./src/lib/convex.js";
@@ -296,10 +297,13 @@ app.post("/errors/:id/replay-service", async (req, res) => {
       txOperations: txEnvelope.operations,
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json(
+      buildClientErrorResponse(err, {
+        code: "REPLAY_FAILED",
+        defaultMessage: "Replay failed",
+        includeStack: false,
+      }),
+    );
   }
 });
 
@@ -400,10 +404,13 @@ app.post("/products/errors/:id/replay-service", async (req, res) => {
       txOperations: txEnvelope.operations,
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json(
+      buildClientErrorResponse(err, {
+        code: "PRODUCT_REPLAY_FAILED",
+        defaultMessage: "Replay failed",
+        includeStack: false,
+      }),
+    );
   }
 });
 
@@ -532,10 +539,13 @@ app.get("/posthog/recordings", async (req, res) => {
       recordings,
     });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message || "Failed to fetch recordings",
-    });
+    res.status(500).json(
+      buildClientErrorResponse(err, {
+        code: "POSTHOG_RECORDINGS_FETCH_FAILED",
+        defaultMessage: "Failed to fetch recordings",
+        includeStack: false,
+      }),
+    );
   }
 });
 
@@ -549,9 +559,13 @@ app.use(async (err, req, res, next) => {
     url: req.originalUrl,
   });
 
-  res.status(500).json({
-    message: "Internal Server Error",
-  });
+  res.status(500).json(
+    buildClientErrorResponse(err, {
+      code: "INTERNAL_SERVER_ERROR",
+      defaultMessage: "Internal Server Error",
+      includeStack: false,
+    }),
+  );
 });
 
 /**
